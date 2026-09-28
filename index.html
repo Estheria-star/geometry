@@ -644,6 +644,83 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border:2px solid var(
   .studio-actions{gap:6px}
 }
 
+
+/* ============================================================
+   P1 移动端优化：触控目标 ≥ 40px、间距加大、控件更顺手
+   ============================================================ */
+@media (max-width:620px){
+  /* 顶栏动作按钮加大 */
+  .studio-bar .btn{padding:10px 12px;min-height:40px;min-width:40px}
+  .studio-actions{gap:8px;flex-wrap:wrap}
+  /* 移动端抽屉开关更大更清晰 */
+  .mobile-dock .btn{padding:10px 14px;min-height:42px}
+  /* 面板页签加大 */
+  .panel-tabs button{padding:12px 4px 13px;min-height:44px;font-size:13.5px}
+  /* 图形网格按钮加大（36 个高频入口） */
+  .shape-btn{min-height:44px;font-size:12.5px}
+  .shape-grid{gap:8px}
+  /* 符号条触控友好 */
+  .sym-btn{min-width:38px;height:36px;font-size:13px}
+  .sym-strip{gap:7px;padding:10px 0 4px}
+  /* 输入行与按钮 */
+  .input-line input{padding:11px 12px;font-size:13px}
+  .input-line .btn{min-height:42px;min-width:42px}
+  .field-label{font-size:12.5px;margin-bottom:9px}
+  /* 小选择控件 */
+  .sel{padding:9px 10px;min-height:38px}
+  /* 选项 chips 加大点按面积 */
+  .chips{gap:9px}
+  .chips button{min-height:36px;padding:0 13px}
+}
+
+
+/* ============================================================
+   P2：调色板 / 表达式编辑行
+   ============================================================ */
+.palette-row{display:flex;gap:7px;margin:9px 2px 2px;flex-wrap:wrap;align-items:center}
+.pal-dot{
+  width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;
+  box-shadow:0 0 0 1px var(--line);transition:transform .15s var(--ease),border-color .15s ease;
+}
+.pal-dot:hover{transform:scale(1.15)}
+.pal-dot.sel{border-color:var(--t1);transform:scale(1.1)}
+.expr-edit-row{margin-top:9px}
+
+
+/* ============================================================
+   P3：拖拽新建预览框
+   ============================================================ */
+#createPrev{
+  position:fixed;z-index:60;pointer-events:none;display:none;
+  border:1.6px dashed var(--brand);border-radius:6px;
+  background:rgba(59,130,246,.10);
+  box-shadow:0 0 0 1px rgba(255,255,255,.35) inset;
+}
+.btn.on{background:linear-gradient(120deg,var(--brand),var(--brand-2));color:#fff;border-color:transparent}
+
+
+/* ============================================================
+   P5/P6：横屏提示 / 只读 / 纯净 / 涂鸦
+   ============================================================ */
+#rotateTip{display:none;position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:200;align-items:center;gap:10px;
+  background:rgba(17,24,39,.92);color:#fff;padding:10px 14px;border-radius:999px;box-shadow:0 10px 30px rgba(0,0,0,.3);font-size:13px}
+#rotateTip button{border:0;border-radius:999px;padding:5px 12px;background:#fff;color:#111;font-weight:600;cursor:pointer;font-family:inherit}
+@media (max-width:820px) and (orientation:portrait){ #rotateTip{display:flex} }
+body.rotDismissed #rotateTip{display:none !important}
+#roBadge{position:fixed;top:14px;right:14px;z-index:180;background:rgba(17,24,39,.92);color:#fff;padding:8px 12px;border-radius:999px;font-size:12.5px;display:flex;gap:8px;align-items:center}
+#roBadge button{border:0;border-radius:999px;padding:4px 10px;background:#f59e0b;color:#111;font-weight:700;cursor:pointer;font-size:12px;font-family:inherit}
+body.ro #action-grid button, body.ro #sel-info button, body.ro #sel-info input, body.ro #param-list input,
+body.ro .studio-actions button, body.ro #btn-dragcreate, body.ro #sel-createkind, body.ro #sel-step,
+body.ro #menu-samples button, body.ro .panel-scroll button, body.ro .panel-scroll input { pointer-events:none !important; opacity:.55 }
+body.pure .topnav, body.pure section.hero, body.pure section.features, body.pure section.faq, body.pure section.contact, body.pure footer { display:none !important }
+#doodleCv{position:absolute;left:0;top:0;z-index:30;touch-action:none;cursor:crosshair;display:none}
+body.doodling #doodleCv{display:block}
+#doodleBar{position:absolute;right:12px;top:12px;z-index:40;display:none;gap:8px;align-items:center;background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:999px;padding:7px 12px;box-shadow:0 10px 24px rgba(0,0,0,.12)}
+body.doodling #doodleBar{display:flex}
+#doodleBar .dd-dot{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;box-shadow:0 0 0 1px var(--line);padding:0}
+#doodleBar .dd-dot.sel{border-color:var(--t1)}
+#doodleBar button.btn{padding:5px 10px}
+
 /* ============================================================
    12. 全局补充与无障碍
    ============================================================ */
@@ -796,6 +873,9 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border:2px solid var(
 </section>
 
 <!-- ===== 工作台 ===== -->
+<div id="rotateTip"><span>📱 建议横屏使用，体验更佳</span><button type="button" id="rotateTipClose">知道了</button></div>
+<div id="roBadge" style="display:none"><span>🔒 只读模式</span><button type="button" id="roBadgeBtn">退出</button></div>
+
 <section class="studio" id="studio">
   <div class="container">
     <div class="sec-head reveal">
@@ -823,6 +903,35 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border:2px solid var(
             <option value="4">精度 4 位</option>
             <option value="6">精度 6 位</option>
           </select>
+          <button class="btn btn-ghost btn-sm" id="btn-dragcreate" title="拖拽新建：按住画布拖出尺寸框，松手生成">✏ 拖拽新建</button>
+          <select class="sel" id="sel-createkind" aria-label="拖拽新建类型" title="拖拽新建的类型">
+            <option value="rect" selected>拖拽：矩形</option>
+            <option value="circle">拖拽：圆</option>
+            <option value="cuboid">拖拽：长方体</option>
+            <option value="cylinder">拖拽：圆柱</option>
+          </select>
+          <select class="sel" id="sel-step" aria-label="步幅" title="拖拽 / 缩放 / 参数调节的步进大小（仅按整数倍调整）">
+            <option value="" selected>步幅 无限制</option>
+            <option value="0.1">步幅 0.1</option>
+            <option value="0.5">步幅 0.5</option>
+            <option value="1">步幅 1</option>
+            <option value="2">步幅 2</option>
+            <option value="5">步幅 5</option>
+            <option value="10">步幅 10</option>
+            <option value="custom">步幅 自定义…</option>
+          </select>
+          <select class="sel" id="sel-view" aria-label="视角" title="固定视角后禁止自由旋转，拖拽仅调整该视图允许的方向">
+            <option value="" selected>视角 自由</option>
+            <option value="front">正视图</option>
+            <option value="side">侧视图</option>
+            <option value="top">俯视图</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" id="btn-pure" title="纯净模式：隐藏介绍内容并进入全屏，可逐块收起组件">🎦 纯净</button>
+          <button class="btn btn-ghost btn-sm" id="btn-exp" title="导出预设：把当前场景保存为 JSON 文件">⬇ 导出预设</button>
+          <button class="btn btn-ghost btn-sm" id="btn-imp" title="导入预设：从 JSON 文件恢复场景">⬆ 导入预设</button>
+          <input type="file" id="impFile" accept=".json,application/json" style="display:none">
+          <button class="btn btn-ghost btn-sm" id="btn-doodle" title="涂鸦层：只在批注层作画，不影响任何几何对象">🖊 涂鸦</button>
+          <button class="btn btn-ghost btn-sm" id="btn-ro" title="只读模式：仅可查看与平移缩放">🔒 只读</button>
           <div class="menu" id="menu-samples">
             <button class="btn btn-ghost btn-sm" id="btn-samples" aria-haspopup="true">
               <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-layers"/></svg><span class="btn-label">示例</span>
@@ -1053,7 +1162,7 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border:2px solid var(
     <div class="sec-head reveal">
       <span class="sec-eyebrow">FAQ / 常见问题</span>
       <h2>你可能想先问的</h2>
-      <p>关于表达式、精度、离线与数据，都在这里说清楚</p>
+      <p>关于表达式、精度、数据与保存，都在这里说清楚</p>
     </div>
     <div class="faq-list">
       <div class="faq-item reveal">
@@ -1134,7 +1243,7 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border:2px solid var(
       <a href="#studio">开始作图</a>
       <a href="#" id="footer-help">使用说明</a>
       <a href="#top" id="footer-top">回到顶部</a>
-      <span class="footer-build">零依赖 · 单文件 · 离线可用</span>
+      <span class="footer-build">零依赖 · 单文件 · 数据存在本机</span>
     </div>
   </div>
 </footer>
@@ -1181,7 +1290,7 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border:2px solid var(
         <tr><td>命名的点</td><td>直接写 <span class="mono">P(1, 2)</span> 即可命名为 P；对象列表里点铅笔图标（或双击名字）可随时改名，关联图形名自动跟随（△ABC 改 A 为 P → △PBC）</td></tr>
         <tr><td>撤销 / 重做</td><td>Ctrl+Z 撤销、Ctrl+Shift+Z（或 Ctrl+Y）重做，也可以点工具栏按钮；添加、删除、清空、拖动、改参数都能撤</td></tr>
         <tr><td>自动保存</td><td>场景自动保存在本机浏览器里，关掉页面再打开会自动恢复；数据不上传任何地方</td></tr>
-        <tr><td>选择与多选</td><td><b>依次点选对象即可多选</b>（最多 3 个，无需按任何键），再点一次取消、点空白处清空；连选两个平面求二面角、选中两点连线、三点定平面（立体模式）</td></tr>
+        <tr><td>选择与多选</td><td><b>依次点选对象即可多选</b>（可任意多选，无需按任何键），再点一次取消、点空白处清空；连选两个平面求二面角、选中两点连线、三点定平面（立体模式）</td></tr>
         <tr><td>导数与圆锥曲线</td><td>选中函数曲线可<b>求导 f′(x)</b>（可一键把导函数画到画布）、分析<b>极值与单调性</b>（可标注极值点）、作<b>切线</b>（指定 x 或选中曲线上的点）；隐式方程可做<b>圆锥曲线分析</b>，自动识别椭圆 / 双曲线 / 抛物线并给出中心、半轴、焦点、离心率、准线、渐近线等；直线与曲线选中后可求<b>弦长</b></td></tr>
       </table>
       <h4>四、默认约束（明确设定）</h4>
@@ -2268,11 +2377,11 @@ var Scene = G.Scene = {
   mode: 'plane',            // 当前模式
   objs: [],                 // 全部对象（含两种模式）
   params: {},               // 参数：name -> { value, min, max, step }
-  selection: [],            // 选中对象 id 列表（最多 3）
+  selection: [],            // 选中对象 id 列表（可任意多选）
   nextId: 1,
   colorIdx: 0,
   counters: {},             // 命名计数：A B C ... / f1 f2 ... / 三角形1 ...
-  MAXSEL: 3,
+  MAXSEL: 99,
 
   /* 添加对象 */
   add: function (o) {
@@ -2342,6 +2451,54 @@ G.ensureParams = function (o) {
     if (!Scene.params[name]) Scene.params[name] = { value: 1, min: -5, max: 5, step: 0.05 };
   });
 };
+/* === 步幅引擎（拖拽 / 缩放 / 参数调节统一量化；参照 Windows 计算器「步骤」）=== */
+G.STEP = null;                       /* null = 无限制；正数 = 步幅 */
+G.SNAP = true;                       /* 吸附开关（点-点 / 线-线平行） */
+G.DRAGCREATE = false;                /* 拖拽新建模式 */
+G.quantize = function (v) {
+  if (!G.STEP || !isFinite(v)) return v;
+  var q = Math.round(v / G.STEP) * G.STEP;
+  return Math.round(q * 1e6) / 1e6;
+};
+
+/* === 精确显示（分数 / 根号；识别不出返回空串，调用方回退小数）=== */
+G.exact = function (v) {
+  if (!isFinite(v)) return '';
+  var sign = v < 0 ? '-' : '';
+  var x = Math.abs(v);
+  if (x < 1e-12) return '0';
+  /* 1) 分数 p/q（q ≤ 64） */
+  for (var q = 1; q <= 64; q++) {
+    var p = x * q;
+    if (Math.abs(p - Math.round(p)) < Math.max(1e-8, x * 1e-9) * q) {
+      var P = Math.round(p);
+      if (P === 0) continue;
+      var g = (function (a, b) { while (b) { var t = a % b; a = b; b = t; } return a; })(P, q);
+      P /= g; q /= g;
+      if (q === 1) return sign + String(P);
+      if (q <= 12) return sign + P + '/' + q;
+      break;
+    }
+  }
+  /* 2) 根号形式 √k / q（q ≤ 24，k ≤ 200，平方因子化简） */
+  for (var q2 = 1; q2 <= 24; q2++) {
+    var y = x * q2;
+    var k2 = y * y;
+    var K = Math.round(k2);
+    if (K > 200) break;
+    if (K > 0 && Math.abs(k2 - K) < Math.max(1e-7, K * 1e-9)) {
+      var m = 1, kk = K;
+      for (var f = 2; f * f <= kk; f++) {
+        while (kk % (f * f) === 0) { kk /= (f * f); m *= f; }
+      }
+      if (kk === 1) continue;   /* 完全平方数已由分数分支覆盖 */
+      var numStr = (m > 1 ? m + '√' + kk : '√' + kk);
+      return sign + (q2 === 1 ? numStr : numStr + '/' + q2);
+    }
+  }
+  return '';
+};
+
 /* 清掉不再被引用的参数 */
 G.syncParams = function () {
   var used = {};
@@ -2353,6 +2510,7 @@ G.setParam = function (name, value) {
   if (!def) return;
   var v = parseFloat(value);
   if (!isFinite(v)) return;
+  if (G.STEP) v = G.quantize(v);   /* 步幅量化：参数调节同理（计算器「步骤」） */
   /* 超出范围自动扩展滑块（向整十倍数） */
   if (v < def.min) def.min = Math.floor(v / 10) * 10;
   if (v > def.max) def.max = Math.ceil(v / 10) * 10;
@@ -3585,6 +3743,15 @@ function evPos(e) {
 canvas.addEventListener('pointerdown', function (e) {
   /* 立体模式交给 3D 引擎处理 */
   if (Scene.mode === 'solid') { if (G.pointer3D) G.pointer3D('down', e, evPos(e)); return; }
+  if (G.DRAGCREATE) {
+    canvas.setPointerCapture(e.pointerId);
+    var pr0 = evPos(e);
+    ptrs.set(e.pointerId, pr0);
+    drag = { kind: 'rectmake', x0: pr0.x, y0: pr0.y };
+    drag.last = pr0;
+    G.makePrev(true, e.clientX, e.clientY);
+    return;
+  }
   canvas.setPointerCapture(e.pointerId);
   var p = evPos(e);
   ptrs.set(e.pointerId, p);
@@ -3600,10 +3767,15 @@ canvas.addEventListener('pointerdown', function (e) {
   if (ptrs.size > 2) return;
   var hit = hitTest(p.x, p.y);
   downInfo = { x: p.x, y: p.y, hit: hit, moved: false, time: Date.now(), shift: e.shiftKey };
+  if (G.READONLY) {
+    /* 只读模式：拖拽只平移视图，不移动/不缩放任何对象 */
+    drag = { kind: 'pan', startCX: view.cx, startCY: view.cy, start: p };
+    return;
+  }
   if (hit.kind === 'handle') {
     drag = { kind: 'handle', obj: hit.obj, handle: hit.handle, start: s2w(p.x, p.y) };
   } else if (hit.kind === 'object' && canDragObject(hit.obj)) {
-    drag = { kind: 'object', obj: hit.obj, last: s2w(p.x, p.y) };
+    drag = { kind: 'object', obj: hit.obj, last: s2w(p.x, p.y), startW: s2w(p.x, p.y), startRef: objRef(hit.obj) };
   } else {
     drag = { kind: 'pan', startCX: view.cx, startCY: view.cy, start: p };
   }
@@ -3640,10 +3812,133 @@ function moveObject(o, dx, dy) {
     ptsOf(o).forEach(function (p) { p.x += dx; p.y += dy; });
   }
 }
+/* === 拖拽新建（Word 式：按住拖出一个框，松手生成）=== */
+var createPrev = null;
+G.makePrev = function (on, cx, cy, x0, y0) {
+  if (!createPrev) {
+    createPrev = document.createElement('div');
+    createPrev.id = 'createPrev';
+    document.body.appendChild(createPrev);
+  }
+  if (!on) { createPrev.style.display = 'none'; return; }
+  var r = canvas.getBoundingClientRect();
+  var sx = cx, sy = cy;
+  if (x0 !== undefined) {
+    var a = { x: r.left + x0, y: r.top + y0 };
+    var left = Math.min(a.x, sx), top = Math.min(a.y, sy);
+    createPrev.style.left = left + 'px'; createPrev.style.top = top + 'px';
+    createPrev.style.width = Math.abs(sx - a.x) + 'px';
+    createPrev.style.height = Math.abs(sy - a.y) + 'px';
+  } else {
+    createPrev.style.left = sx + 'px'; createPrev.style.top = sy + 'px';
+    createPrev.style.width = '0px'; createPrev.style.height = '0px';
+  }
+  createPrev.style.display = 'block';
+};
+function rectCreate2D(x0, y0, x1, y1) {
+  if (Math.abs(x1 - x0) < 8 && Math.abs(y1 - y0) < 8) return;   /* 误点忽略 */
+  var w0 = s2w(Math.min(x0, x1), Math.max(y0, y1));
+  var w1 = s2w(Math.max(x0, x1), Math.min(y0, y1));
+  var qx = function (v) { return G.STEP ? G.quantize(v) : Math.round(v * 1e3) / 1e3; };
+  var X0 = qx(w0.x), X1 = qx(w1.x), Y0 = qx(w0.y), Y1 = qx(w1.y);
+  var kind = G.CREATEKIND || 'rect';
+  if (kind === 'circle') {
+    var cx = (X0 + X1) / 2, cy = (Y0 + Y1) / 2;
+    var rr = Math.max(0.2, Math.min(X1 - X0, Y1 - Y0) / 2);
+    var ce = G.mkp(null, cx, cy, 0);
+    var ci = { type: 'circle', mode: Scene.mode, name: '⊙' + ce.name, cid: ce.id, r: rr, fill: true };
+    Scene.add(ci);
+    Scene.setSel([ci.id]);
+    if (G.toast) G.toast('已创建 ' + ci.name + '（r = ' + G.fmt(rr) + '）', 'ok');
+  } else {
+    var A = G.mkp(null, X0, Y1, 0), B = G.mkp(null, X1, Y1, 0), C = G.mkp(null, X1, Y0, 0), D = G.mkp(null, X0, Y0, 0);
+    var po = G.mkpoly([A, B, C, D], '矩形' + A.name + B.name + C.name + D.name, 'rect');
+    Scene.setSel([po.id]);
+    if (G.toast) G.toast('已创建 ' + po.name, 'ok');
+  }
+  G.emit('objects');
+  G.emit('changed');
+}
+
+/* === 吸附：点优先（靠近即吸到最近点），线段次之（近平行吸平行）=== */
+G.snapHint = function (name) {
+  if (Date.now() - (G._snapAt || 0) < 900) return;
+  G._snapAt = Date.now();
+  if (G.flash) G.flash('📌 吸附到 ' + name);
+};
+function trySnapObj2D(o) {
+  if (!G.SNAP || !o) return false;
+  var ref = objRef(o);
+  if (!ref) return false;
+  var thr = 12 / (view.scale || 40);
+  var best = null, bd = thr;
+  Scene.objs.forEach(function (o2) {
+    if (o2.type !== 'point' || !o2.visible || o2.mode !== o.mode) return;
+    if (o2.id === o.id) return;
+    if (o.pids && o.pids.indexOf(o2.id) >= 0) return;   /* 自己的顶点不算 */
+    if (o.cid === o2.id) return;
+    var d = Math.hypot(o2.x - ref.x, o2.y - ref.y);
+    if (d < bd) { bd = d; best = o2; }
+  });
+  if (best) {
+    moveObject(o, best.x - ref.x, best.y - ref.y);
+    G.snapHint(best.name);
+    return true;
+  }
+  /* 线段类：近平行吸附 */
+  if (o.pids && o.pids.length === 2 && (o.type === 'segment' || o.type === 'line')) {
+    var ps = ptsOf(o);
+    if (ps.length === 2) {
+      var a = ps[0], b = ps[1];
+      var la = Math.hypot(b.x - a.x, b.y - a.y);
+      if (la > 1e-6) {
+        var ang = Math.atan2(b.y - a.y, b.x - a.x);
+        var bd2 = 4.5 * Math.PI / 180, bestA = null;
+        var nearThr = 60 / (view.scale || 40);
+        Scene.objs.forEach(function (o3) {
+          if (o3.id === o.id || (o3.type !== 'segment' && o3.type !== 'line') || !o3.visible || o3.mode !== o.mode) return;
+          var q = (o3.pids || []).map(function (id) { return Scene.byId(id); }).filter(Boolean);
+          if (q.length < 2) return;
+          var mid3x = (q[0].x + q[1].x) / 2, mid3y = (q[0].y + q[1].y) / 2;
+          if (Math.hypot(mid3x - (a.x + b.x) / 2, mid3y - (a.y + b.y) / 2) > nearThr) return;
+          var ang3 = Math.atan2(q[1].y - q[0].y, q[1].x - q[0].x);
+          var diff = Math.abs(ang - ang3) % Math.PI;
+          if (diff > Math.PI / 2) diff = Math.PI - diff;
+          if (diff < bd2) { bd2 = diff; bestA = ang3; }
+        });
+        if (bestA !== null) {
+          b.x = a.x + la * Math.cos(bestA);
+          b.y = a.y + la * Math.sin(bestA);
+          G.snapHint('平行（' + G.fmt(G.deg(bestA)) + '°）');
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/* 取对象参考点（拖拽量化的锚点） */
+function objRef(o) {
+  if (!o) return null;
+  if (o.type === 'point') return { x: o.x, y: o.y };
+  if (o.type === 'vector') return { x: o.ox, y: o.oy };
+  if (o.type === 'circle' || o.type === 'ellipse' || o.type === 'sector') {
+    var c = Scene.byId(o.cid);
+    return c ? { x: c.x, y: c.y } : null;
+  }
+  var ps = ptsOf(o);
+  return ps.length ? { x: ps[0].x, y: ps[0].y } : null;
+}
 
 canvas.addEventListener('pointermove', function (e) {
   var p = evPos(e);
   if (Scene.mode === 'solid') { if (G.pointer3D) G.pointer3D('move', e, p); return; }
+  if (drag && drag.kind === 'rectmake') {
+    G.makePrev(true, e.clientX, e.clientY, drag.x0, drag.y0);
+    drag.last = p;
+    return;
+  }
   if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, p);
   /* 光标读数 */
   var wcur = s2w(p.x, p.y);
@@ -3664,13 +3959,24 @@ canvas.addEventListener('pointermove', function (e) {
     view.cy = drag.startCY + (p.y - drag.start.y) / view.scale;
   } else if (drag.kind === 'handle') {
     var wp = s2w(p.x, p.y);
-    drag.handle.set(wp.x, wp.y);
+    drag.handle.set(G.quantize(wp.x), G.quantize(wp.y));
     unbindPts(drag.obj);
   } else if (drag.kind === 'object') {
     var w2_ = s2w(p.x, p.y);
-    var dx = w2_.x - drag.last.x, dy = w2_.y - drag.last.y;
-    moveObject(drag.obj, dx, dy);
+    if (G.STEP && drag.startRef) {
+      /* 步幅：目标 = 起始参考点 + 累计原始位移，整体量化后再与当前参考点求差 */
+      var ref = objRef(drag.obj);
+      if (ref) {
+        var tx = G.quantize(drag.startRef.x + (w2_.x - drag.startW.x));
+        var ty = G.quantize(drag.startRef.y + (w2_.y - drag.startW.y));
+        moveObject(drag.obj, tx - ref.x, ty - ref.y);
+      }
+    } else {
+      var dx = w2_.x - drag.last.x, dy = w2_.y - drag.last.y;
+      moveObject(drag.obj, dx, dy);
+    }
     drag.last = w2_;
+    trySnapObj2D(drag.obj);
     unbindPts(drag.obj);
   } else if (drag.kind === 'pinch') {
     var two = Array.from(ptrs.values());
@@ -3693,6 +3999,14 @@ canvas.addEventListener('pointermove', function (e) {
 function endPointer(e) {
   var p = evPos(e);
   if (Scene.mode === 'solid') { if (G.pointer3D) G.pointer3D('up', e, p); return; }
+  if (drag && drag.kind === 'rectmake') {
+    var rk = drag;
+    drag = null;
+    ptrs.delete(e.pointerId);
+    G.makePrev(false);
+    rectCreate2D(rk.x0, rk.y0, p.x, p.y);
+    return;
+  }
   ptrs.delete(e.pointerId);
   if (downInfo && !downInfo.moved && Date.now() - downInfo.time < 600 && ptrs.size === 0) {
     /* 视为点击选择 */
@@ -4107,6 +4421,38 @@ G.defaultDims = function (kind) {
 };
 G.SOLID_LABEL = { cube: '正方体', cuboid: '长方体', prism: '正棱柱', pyramid: '正棱锥', tetra: '正四面体',
   cylinder: '圆柱', cone: '圆锥', frustum: '圆台', sphere: '球' };
+
+/* 拖拽新建（立体）：地面矩形框 → 长方体 / 圆柱 */
+function rectCreate3D(x0, y0, x1, y1) {
+  if (Math.abs(x1 - x0) < 8 && Math.abs(y1 - y0) < 8) return;
+  var a = screenToZPlane(x0, Math.max(y0, y1), 0);
+  var b = screenToZPlane(x1, Math.min(y0, y1), 0);
+  if (!a || !b) return;
+  var qx = function (v) { return G.STEP ? G.quantize(v) : Math.round(v * 1e3) / 1e3; };
+  var w = Math.max(0.2, Math.abs(qx(b.x) - qx(a.x)));
+  var dpt = Math.max(0.2, Math.abs(qx(b.y) - qx(a.y)));
+  var cx = (qx(a.x) + qx(b.x)) / 2, cy = (qx(a.y) + qx(b.y)) / 2;
+  var kind = G.CREATEKIND || 'cuboid';
+  var o;
+  if (kind === 'cylinder') {
+    var r = Math.max(0.2, Math.min(w, dpt) / 2);
+    o = { type: 'solid', mode: 'solid', kind: 'cylinder', name: G.nameOf('圆柱 ', 'cylinder'), dims: { r: r, h: 2.4 }, cx: cx, cy: cy, cz: 0 };
+  } else {
+    o = { type: 'solid', mode: 'solid', kind: 'cuboid', name: G.nameOf('长方体 ', 'cuboid'), dims: { a: w, b: dpt, c: 1.8 }, cx: cx, cy: cy, cz: 0 };
+  }
+  Scene.add(o);
+  Scene.setSel([o.id]);
+  G.emit('selection');
+  if (G.toast) G.toast('已创建 ' + o.name + '（拖拽尺寸 ' + G.fmt(w) + ' × ' + G.fmt(dpt) + '）', 'ok');
+}
+
+/* 尺寸参数量化与守卫（n 为整数棱数；其余为正实数，步幅开启时量化） */
+G.quantizeDim = function (key, v) {
+  if (!isFinite(v)) return v;
+  if (key === 'n') return Math.max(3, Math.min(24, Math.round(v)));
+  var q = G.STEP ? G.quantize(v) : v;
+  return Math.max(0.1, Math.min(30, q));
+};
 
 /* ============================================================
    3. 绘制
@@ -5000,6 +5346,14 @@ function pointInPoly2(x, y, poly) {
 var ptr3 = new Map(), st3 = null;
 
 G.pointer3D = function (type, e, p) {
+  if (type === 'down' && G.DRAGCREATE) {
+    canvas.setPointerCapture(e.pointerId);
+    ptr3.set(e.pointerId, p);
+    st3 = { kind: 'rectmake3d', x0: p.x, y0: p.y, x: p.x, y: p.y };
+    st3.last = p;
+    G.makePrev(true, e.clientX, e.clientY);
+    return;
+  }
   if (type === 'down') {
     canvas.setPointerCapture(e.pointerId);
     ptr3.set(e.pointerId, p);
@@ -5007,6 +5361,7 @@ G.pointer3D = function (type, e, p) {
       var pan = e.shiftKey || e.button === 2;
       st3 = { kind: pan ? 'pan' : 'rot', x: p.x, y: p.y, yaw: cam.yaw, pitch: cam.pitch, tx: cam.tx, ty: cam.ty, tz: cam.tz, moved: false };
       var hit = pan ? null : pick3(p.x, p.y);
+      if (G.READONLY) hit = null;   /* 只读模式：不允许拖动点/几何体/函数 */
       st3.hit = hit;
       if (hit && hit.type === 'point') {
         st3.kind = 'dragpt';
@@ -5041,8 +5396,15 @@ G.pointer3D = function (type, e, p) {
   } else if (type === 'move') {
     if (ptr3.has(e.pointerId)) ptr3.set(e.pointerId, p);
     if (!st3) return;
+    if (st3.kind === 'rectmake3d') {
+      G.makePrev(true, e.clientX, e.clientY, st3.x0, st3.y0);
+      st3.last = p;
+      return;
+    }
     if (Math.hypot(p.x - st3.x, p.y - st3.y) > 4 && st3.moved !== undefined) st3.moved = true;
     if (st3.kind === 'rot') {
+      /* 固定视角下禁止自由旋转（点击选中仍可用） */
+      if (G.VIEWLOCK) return;
       /* 拨转盘手感：向右拖 → 物体向右转；向下拖 → 物体朝自己滚（顶面转过来） */
       cam.yaw = st3.yaw - (p.x - st3.x) * 0.007;
       cam.pitch = G.clamp(st3.pitch + (p.y - st3.y) * 0.006, -1.45, 1.45);
@@ -5059,16 +5421,21 @@ G.pointer3D = function (type, e, p) {
         var qv = proj(st3.startWorld);
         var kv = (qv ? qv.depth : cam.dist) / FOCAL / Math.max(0.3, Math.cos(cam.pitch));
         var nz = st3.startWorld.z - (p.y - st3.y) * kv;
-        st3.pt.z = Math.round(nz * 1e4) / 1e4;
+        st3.pt.z = G.quantize(Math.round(nz * 1e4) / 1e4);
         G.flash(st3.pt.name + '   高度 z = ' + G.fmt(st3.pt.z));
       } else {
         /* 默认：在过该点的水平面内移动（z 保持不变，手感可预期） */
         var wp = screenToZPlane(p.x, p.y, st3.planeZ);
         if (wp) {
-          st3.pt.x = Math.round(wp.x * 1e4) / 1e4;
-          st3.pt.y = Math.round(wp.y * 1e4) / 1e4;
+          st3.pt.x = G.quantize(Math.round(wp.x * 1e4) / 1e4);
+          st3.pt.y = G.quantize(Math.round(wp.y * 1e4) / 1e4);
         }
         G.flash(st3.pt.name + '   (' + G.fmt(st3.pt.x) + ', ' + G.fmt(st3.pt.y) + ', ' + G.fmt(st3.pt.z || 0) + ')');
+      }
+      if (G.VIEWLOCK) {
+        if (G.VIEWLOCK === 'y') st3.pt.y = st3.startWorld.y;
+        if (G.VIEWLOCK === 'x') st3.pt.x = st3.startWorld.x;
+        if (G.VIEWLOCK === 'z') st3.pt.z = st3.startWorld.z;
       }
       if (st3.pt._expr) {
         st3.pt._expr = null;
@@ -5083,14 +5450,19 @@ G.pointer3D = function (type, e, p) {
         /* Ctrl 拖动：竖直升降（xy 不变） */
         var qs = proj({ x: st3.solid.cx || 0, y: st3.solid.cy || 0, z: st3.startZ + 1 });
         var ks = (qs ? qs.depth : cam.dist) / FOCAL / Math.max(0.3, Math.cos(cam.pitch));
-        st3.solid.cz = Math.round((st3.startZ - (p.y - st3.y) * ks) * 1e4) / 1e4;
+        st3.solid.cz = G.quantize(Math.round((st3.startZ - (p.y - st3.y) * ks) * 1e4) / 1e4);
       } else {
         /* 默认：在底面所在高度（z = cz）的水平面内移动 */
         var wp2 = screenToZPlane(p.x, p.y, st3.startZ);
         if (wp2 && st3.base) {
-          st3.solid.cx = st3.sx0 + (wp2.x - st3.base.x);
-          st3.solid.cy = st3.sy0 + (wp2.y - st3.base.y);
+          st3.solid.cx = G.quantize(st3.sx0 + (wp2.x - st3.base.x));
+          st3.solid.cy = G.quantize(st3.sy0 + (wp2.y - st3.base.y));
         }
+      }
+      if (G.VIEWLOCK) {
+        if (G.VIEWLOCK === 'y') st3.solid.cy = st3.sy0;
+        if (G.VIEWLOCK === 'x') st3.solid.cx = st3.sx0;
+        if (G.VIEWLOCK === 'z') st3.solid.cz = st3.startZ;
       }
       st3.solid._built = null;
       G.flash('位置  (' + G.fmt(st3.solid.cx || 0) + ', ' + G.fmt(st3.solid.cy || 0) + ', ' + G.fmt(st3.solid.cz || 0) + ')');
@@ -5100,14 +5472,19 @@ G.pointer3D = function (type, e, p) {
         /* Ctrl 拖动：竖直升降（xy 不变） */
         var qf = proj({ x: st3.f0.tx, y: st3.f0.ty, z: st3.f0.tz + 1 });
         var kf = (qf ? qf.depth : cam.dist) / FOCAL / Math.max(0.3, Math.cos(cam.pitch));
-        t3m.tz = Math.round((st3.f0.tz - (p.y - st3.y) * kf) * 1e4) / 1e4;
+        t3m.tz = G.quantize(Math.round((st3.f0.tz - (p.y - st3.y) * kf) * 1e4) / 1e4);
         G.flash('高度 z = ' + G.fmt(t3m.tz));
       } else {
         /* 默认：在过当前高度（tz）的水平面内移动 */
         var wpf = st3.base ? screenToZPlane(p.x, p.y, st3.f0.tz) : null;
         if (wpf && st3.base) {
-          t3m.tx = Math.round((st3.f0.tx + (wpf.x - st3.base.x)) * 1e4) / 1e4;
-          t3m.ty = Math.round((st3.f0.ty + (wpf.y - st3.base.y)) * 1e4) / 1e4;
+          t3m.tx = G.quantize(Math.round((st3.f0.tx + (wpf.x - st3.base.x)) * 1e4) / 1e4);
+          t3m.ty = G.quantize(Math.round((st3.f0.ty + (wpf.y - st3.base.y)) * 1e4) / 1e4);
+        }
+        if (G.VIEWLOCK) {
+          if (G.VIEWLOCK === 'y') t3m.ty = st3.f0.ty;
+          if (G.VIEWLOCK === 'x') t3m.tx = st3.f0.tx;
+          if (G.VIEWLOCK === 'z') t3m.tz = st3.f0.tz;
         }
         G.flash('位置  (' + G.fmt(t3m.tx) + ', ' + G.fmt(t3m.ty) + ', ' + G.fmt(t3m.tz) + ')');
       }
@@ -5121,6 +5498,14 @@ G.pointer3D = function (type, e, p) {
     G.requestRender();
   } else if (type === 'up') {
     ptr3.delete(e.pointerId);
+    if (st3 && st3.kind === 'rectmake3d') {
+      G.makePrev(false);
+      rectCreate3D(st3.x0, st3.y0, p.x, p.y);
+      st3 = null;
+      G.emit('objects');
+      G.requestRender();
+      return;
+    }
     var wasDrag3 = false;
     if (st3 && (st3.kind === 'rot' || st3.kind === 'pan')) {
       /* 点击选中 */
@@ -5573,8 +5958,8 @@ function renderParams() {
     var p = Scene.params[n];
     return '<div class="param-row">' +
       '<div class="param-head"><span class="param-name">' + n + '</span>' +
-      '<span class="param-val"><input type="number" step="any" value="' + p.value + '" data-p="' + n + '" aria-label="参数 ' + n + '"></span></div>' +
-      '<input type="range" min="' + p.min + '" max="' + p.max + '" step="' + p.step + '" value="' + p.value + '" data-p="' + n + '" aria-label="参数 ' + n + ' 滑块">' +
+      '<span class="param-val"><input type="number" step="' + (G.STEP || 'any') + '" value="' + p.value + '" data-p="' + n + '" aria-label="参数 ' + n + '"></span></div>' +
+      '<input type="range" min="' + p.min + '" max="' + p.max + '" step="' + (G.STEP || p.step) + '" value="' + p.value + '" data-p="' + n + '" aria-label="参数 ' + n + ' 滑块">' +
       '</div>';
   }).join('');
 }
@@ -5641,6 +6026,138 @@ function coordEditor(o, axes, labels) {
     return '<label class="coord-item"><span>' + esc(labels[i]) + '</span>' +
       '<input class="coord-input" type="number" step="any" data-coord="' + o.id + ':' + ax + '" value="' + G.fmt(v) + '"></label>';
   }).join('') + '</div>';
+}
+/* 立体尺寸编辑（步幅联动） */
+var DIM_LABELS = { a: '棱长', b: '宽', c: '高', r: '半径', r1: '下底半径', r2: '上底半径', h: '高', n: '棱数' };
+var DIM_LABELS_KIND = {
+  cube: { a: '棱长' },
+  cuboid: { a: '长', b: '宽', c: '高' },
+  prism: { r: '底面外接圆半径', h: '高', n: '棱数（3-24）' },
+  pyramid: { r: '底面外接圆半径', h: '高', n: '底面边数（3-24）' },
+  tetra: { a: '棱长' },
+  cylinder: { r: '底面半径', h: '高' },
+  cone: { r: '底面半径', h: '高' },
+  frustum: { r1: '下底半径', r2: '上底半径', h: '高' },
+  sphere: { r: '半径' }
+};
+function dimsEditor(o) {
+  var D = o.dims || {};
+  var kindLab = DIM_LABELS_KIND[o.kind] || {};
+  return '<div class="ro-block" style="margin-top:9px">' +
+    '<div class="ro-title">' + svgIc('i-sliders', 13) + '<span>尺寸（可编辑）</span></div>' +
+    Object.keys(D).map(function (k) {
+      var lab = kindLab[k] || DIM_LABELS[k] || k;
+      var isN = (k === 'n');
+      var stp = isN ? 1 : (G.STEP || 0.1);
+      var mn = isN ? 3 : 0.1, mx = isN ? 24 : 30;
+      return '<div class="param-row">' +
+        '<div class="param-head"><span class="param-name">' + lab + '</span>' +
+        '<span class="param-val"><input type="number" min="' + mn + '" max="' + mx + '" step="' + stp + '" value="' + D[k] + '" data-dim="' + o.id + ':' + k + '"></span></div>' +
+        '<input type="range" min="' + mn + '" max="' + mx + '" step="' + stp + '" value="' + D[k] + '" data-dim="' + o.id + ':' + k + '">' +
+        '</div>';
+    }).join('') +
+    '<div class="step" style="color:var(--t3);font-size:11px;margin-top:4px">拖动滑杆或输入精确值；开启步幅时仅按步幅整数倍调整</div></div>';
+}
+/* 夹角卡（选中两条线段/直线时出现，按步幅调节） */
+function angleCard(o1, o2) {
+  if (!o1 || !o2) return '';
+  if ((o1.type !== 'segment' && o1.type !== 'line') || (o2.type !== 'segment' && o2.type !== 'line')) return '';
+  var p1 = (o1.pids || []).map(function (id) { return Scene.byId(id); });
+  var p2 = (o2.pids || []).map(function (id) { return Scene.byId(id); });
+  if (p1.length < 2 || p2.length < 2 || !p1[0] || !p1[1] || !p2[0] || !p2[1]) return '';
+  var a1 = Math.atan2(p1[1].y - p1[0].y, p1[1].x - p1[0].x);
+  var a2 = Math.atan2(p2[1].y - p2[0].y, p2[1].x - p2[0].x);
+  var rel = a2 - a1;
+  while (rel <= -Math.PI) rel += 2 * Math.PI;
+  while (rel > Math.PI) rel -= 2 * Math.PI;
+  var cur = Math.round(Math.abs(G.deg(rel)) * 10) / 10;
+  var stp = G.STEP || 1;
+  return '<div class="ro-block" style="margin-top:9px">' +
+    '<div class="ro-title">' + svgIc('i-angle', 13) + '<span>调整夹角（' + esc(o1.name) + ' ↔ ' + esc(o2.name) + '）</span></div>' +
+    '<div class="param-row">' +
+    '<div class="param-head"><span class="param-name">夹角 °</span>' +
+    '<span class="param-val"><input type="number" min="0" max="180" step="' + stp + '" value="' + cur + '" data-ang="' + o1.id + ':' + o2.id + '"></span></div>' +
+    '<input type="range" min="0" max="180" step="' + stp + '" value="' + cur + '" data-ang="' + o1.id + ':' + o2.id + '">' +
+    '</div>' +
+    '<div class="step" style="color:var(--t3);font-size:11px;margin-top:4px">' + (G.STEP ? '按步幅 ' + G.STEP + ' 的整数倍调整' : '自由调整') + '；第二条线段绕自身起点旋转</div>' +
+    '<div class="kv" style="margin-top:6px"><span class="k">sin</span><span class="v">' + trigFmt(Math.sin(G.rad(cur))) + '</span></div>' +
+    '<div class="kv"><span class="k">cos</span><span class="v">' + trigFmt(Math.cos(G.rad(cur))) + '</span></div>' +
+    '<div class="kv"><span class="k">tan</span><span class="v">' + trigFmt(Math.tan(G.rad(cur))) + '</span></div>' +
+    '</div>';
+}
+function trigFmt(v) {
+  if (!isFinite(v) || Math.abs(v) > 1e15) return '不存在';
+  var e = G.exact(v);
+  return e ? e + '（≈ ' + G.fmt(v) + '）' : G.fmt(v);
+}
+function applyAngle(o1, o2, deg) {
+  var p1 = (o1.pids || []).map(function (id) { return Scene.byId(id); });
+  var p2 = (o2.pids || []).map(function (id) { return Scene.byId(id); });
+  if (p1.length < 2 || p2.length < 2 || !p1[0] || !p2[0] || !p2[1]) return;
+  var a1 = Math.atan2(p1[1].y - p1[0].y, p1[1].x - p1[0].x);
+  var a2 = Math.atan2(p2[1].y - p2[0].y, p2[1].x - p2[0].x);
+  var rel = a2 - a1;
+  while (rel <= -Math.PI) rel += 2 * Math.PI;
+  while (rel > Math.PI) rel -= 2 * Math.PI;
+  var sign = rel >= 0 ? 1 : -1;
+  var len = Math.hypot(p2[1].x - p2[0].x, p2[1].y - p2[0].y);
+  var na = a1 + sign * G.rad(deg);
+  p2[1].x = p2[0].x + len * Math.cos(na);
+  p2[1].y = p2[0].y + len * Math.sin(na);
+  G.requestRender();
+}
+
+/* 调色板（线条/填充颜色） */
+function paletteRow(o) {
+  if (o.colorIdx === undefined) return '';
+  return '<div class="palette-row"><span style="font-size:11.5px;color:var(--t3);margin-right:2px">颜色</span>' +
+    [0, 1, 2, 3, 4, 5, 6, 7].map(function (i) {
+      return '<button class="pal-dot' + (o.colorIdx === i ? ' sel' : '') + '" data-pal="' + o.id + ':' + i + '" style="background:' + G.colorOf(i) + '" title="配色 ' + (i + 1) + '" aria-label="配色 ' + (i + 1) + '"></button>';
+    }).join('') + '</div>';
+}
+/* 表达式修改入口（函数 / 方程 / 曲面） */
+function exprEditRow(o) {
+  return '<div class="expr-edit-row"><button class="btn btn-ghost btn-sm" data-edit-expr="' + o.id + '" style="width:100%">✎ 修改表达式（' + esc(o.display || '') + '）</button></div>';
+}
+G.editingExpr = null;
+function startExprEdit(o) {
+  G.editingExpr = o.id;
+  var tb = document.querySelector('#input-tabs button[data-pane="pane-func"]');
+  if (tb && !tb.classList.contains('active')) tb.click();
+  var inp = $('input-func');
+  if (inp) {
+    inp.value = o.display || '';
+    inp.placeholder = '修改 ' + o.name + ' 的表达式，回车确认（Esc 取消）';
+    inp.focus();
+    if (inp.select) { try { inp.select(); } catch (e) {} }
+  }
+  toast('正在修改 ' + o.name + '：回车确认，Esc 取消', 'info');
+}
+function endExprEdit(done) {
+  G.editingExpr = null;
+  var inp = $('input-func');
+  if (inp) { inp.value = ''; inp.placeholder = 'y = a*sin(b*x)'; }
+}
+function applyExprEdit(str) {
+  var o = Scene.byId(G.editingExpr);
+  if (!o) { endExprEdit(false); return; }
+  if (!str) throw new Error('表达式不能为空（Esc 可取消修改）');
+  var parsed = G.parseEquation(str, Scene.mode);
+  if (parsed.kind === 'surfaceZ' && !parsed.fn.vars.length) throw new Error('曲面表达式需要包含 x 或 y');
+  o.kind = parsed.kind;
+  o.display = parsed.display;
+  o.params = parsed.params || [];
+  ['fn', 'xFn', 'yFn', 'eval', 'tip', 'op', 'truth'].forEach(function (k) {
+    if (parsed[k] !== undefined) o[k] = parsed[k]; else delete o[k];
+  });
+  o.type = (parsed.kind === 'surfaceZ') ? 'surface' : 'func';
+  G.ensureParams(o);
+  G.syncParams();
+  G.refreshParametric();
+  endExprEdit(true);
+  toast('已更新 ' + o.name + ' → ' + parsed.display, 'ok');
+  G.emit('changed');
+  renderAll();
 }
 function objReadout(o, solid) {
   var h = '';
@@ -5752,10 +6269,8 @@ function objReadout(o, solid) {
       } else h += kv('提示', '三点共线', 'warn');
     }
   } else if (o.type === 'solid') {
-    var D = o.dims;
-    h += coordEditor(o, ['cx', 'cy', 'cz'], ['x', 'y', 'z']);
-    var dimStr = Object.keys(D).map(function (k) { return k + ' = ' + D[k]; }).join('，');
-    h += kv('尺寸', esc(dimStr), 'brand');
+    h += coordEditor(o, ['cx', 'cy', 'cz'], ['位置 x', '位置 y', '高度 z']);
+    h += dimsEditor(o);
     var vol = G.volumeOf(o);
     if (vol) h += kv('体积', esc(G.fmt(vol.value)), 'ok');
     var sa = G.surfaceAreaOf(o);
@@ -5806,7 +6321,7 @@ function renderSel() {
     renderActions();
     return;
   }
-  var h = '<div class="sel-count">已选 ' + sel.length + ' / ' + Scene.MAXSEL + ' · 继续点选可多选，点空白处清空</div>';
+  var h = '<div class="sel-count">已选 ' + sel.length + ' 个 · 继续点选可多选，点空白处清空</div>';
   /* 两条向量：自动关系判定 */
   if (sel.length === 2 && sel[0].type === 'vector' && sel[1].type === 'vector') {
     var A0 = sel[0], B0 = sel[1];
@@ -5828,9 +6343,12 @@ function renderSel() {
       if (i > 0) h += '<div style="height:1px;background:var(--line);margin:9px 0"></div>';
       h += selNameRow(o);
       h += objReadout(o, solid);
+      if (o.type === 'func' || o.type === 'surface') h += exprEditRow(o);
+      h += paletteRow(o);
       /* 单选函数 / 曲面（立体模式）：附空间变换卡片 */
       if (solid && sel.length === 1 && (o.type === 'func' || o.type === 'surface')) h += t3Card(o);
     });
+    if (sel.length === 2 && !solid) h += angleCard(sel[0], sel[1]);
   }
   info.innerHTML = h;
   renderActions();
@@ -5860,9 +6378,23 @@ function renderActions() {
       add('圆锥曲线分析', 'conic', 'i-circle');
     }
     if (o.type === 'solid') { add('求体积', 'volume', 'i-box'); add('求表面积', 'surfarea', 'i-ruler'); }
+    if (o.type === 'point') add('以此点建系', 'frame', 'i-plane');
     if (solid && o.type === 'point') add('删除', 'del', 'i-trash');
-  } else if (sel.length === 2) {
-    if (sel.every(function (p) { return p.type === 'point'; })) add('连接两点', 'link', 'i-link');
+  } else if (sel.length >= 2) {
+    if (sel.every(function (p) { return p.type === 'point'; })) {
+      add(sel.length === 2 ? '连接两点' : '连成折线（按顺序）', 'link', 'i-link');
+      if (sel.length >= 3) add('连成多边形', 'link-poly', 'i-tri');
+    }
+    if (sel.length >= 3 && sel.every(function (p) { return p.type === 'segment' || p.type === 'line'; })) {
+      add('构成平面（闭合环）', 'make-face', 'i-plane');
+    }
+    if (sel.length === 3 && sel.every(function (p) { return p.type === 'point'; })) {
+      if (solid) add('三点定平面', 'plane', 'i-plane');
+      add('求角的三角值', 'trig3', 'i-angle');
+    }
+    if (solid && sel.length >= 4 && sel.every(function (p) { return p.type === 'poly'; })) {
+      add('组合成立体（封闭校验＋体积）', 'combine3d', 'i-box');
+    }
     var oneCurve = sel.some(function (p) { return p.type === 'func'; });
     var onePoint = sel.some(function (p) { return p.type === 'point'; });
     var oneLine = sel.some(function (p) { return p.type === 'segment' || p.type === 'line'; });
@@ -5874,6 +6406,7 @@ function renderActions() {
     if (solid && ts === 'plane3,plane3') add('求二面角', 'dihedral', 'i-angle');
   } else if (sel.length === 3 && sel.every(function (p) { return p.type === 'point'; })) {
     if (solid) add('三点定平面', 'plane', 'i-plane');
+    add('求角的三角值', 'trig3', 'i-angle');
   }
   if (sel.length && solid && sel.some(function (o) { return o.type === 'solid'; })) {
     add('删除几何体', 'del', 'i-trash');
@@ -6148,9 +6681,49 @@ function runAction(act) {
   } else if (act === 'dihedral') {
     showResult(G.dihedralAngle(sel[0], sel[1]));
   } else if (act === 'link') {
-    var s = mkseg(sel[0], sel[1]);
-    toast('已连接 ' + s.name, 'ok');
-    Scene.setSel([s.id]);
+    if (sel.length === 2) {
+      var s = mkseg(sel[0], sel[1]);
+      toast('已连接 ' + s.name, 'ok');
+      Scene.setSel([s.id]);
+    } else {
+      var made = [];
+      for (var li = 0; li < sel.length - 1; li++) made.push(mkseg(sel[li], sel[li + 1]));
+      toast('已连成折线（' + made.length + ' 段）', 'ok');
+      Scene.setSel(made.map(function (m) { return m.id; }));
+    }
+  } else if (act === 'link-poly') {
+    var lp = mkpoly(sel.slice(), '多边形' + sel.map(function (p) { return p.name; }).join(''), 'poly');
+    toast('已连成多边形 ' + lp.name, 'ok');
+    Scene.setSel([lp.id]);
+  } else if (act === 'make-face') {
+    var segs = sel.filter(function (o) { return o.type === 'segment' || o.type === 'line'; });
+    if (segs.length < 3) { toast('至少需要三条线段才能构成平面', 'warn'); return; }
+    var adj = {};
+    segs.forEach(function (sg) {
+      var pp = (sg.pids || []).map(function (id) { return Scene.byId(id); }).filter(Boolean);
+      if (pp.length < 2) return;
+      var k0 = String(pp[0].id), k1 = String(pp[1].id);
+      (adj[k0] = adj[k0] || []).push(k1);
+      (adj[k1] = adj[k1] || []).push(k0);
+    });
+    var ends = Object.keys(adj);
+    var okLoop = ends.every(function (k) { return adj[k].length === 2; });
+    if (!okLoop) { toast('未组成闭合环：每个顶点需恰好连接 2 条边', 'warn'); return; }
+    var start = ends[0], cur = start, prev = null, chain = [start], used = {}, guard = 0;
+    while (guard++ < ends.length + 2) {
+      var nxts = adj[cur].filter(function (id) { return id !== prev && !used[id]; });
+      if (!nxts.length) break;
+      var nx = nxts[0];
+      used[nx] = 1;
+      chain.push(nx);
+      prev = cur; cur = nx;
+      if (cur === start) break;
+    }
+    if (cur !== start || chain.length !== ends.length + 1) { toast('未能走出完整闭环（可能有分支或断点）', 'warn'); return; }
+    var chainPts = chain.slice(0, -1).map(function (id) { return Scene.byId(parseInt(id, 10)); }).filter(Boolean);
+    var face = mkpoly(chainPts, '面' + chainPts.map(function (p) { return p.name; }).join(''), 'poly');
+    toast('已构成平面 ' + face.name, 'ok');
+    Scene.setSel([face.id]);
   } else if (act === 'plane') {
     var pl = { type: 'plane3', mode: 'solid', name: G.namePlane(), pids: sel.map(function (p) { return p.id; }) };
     Scene.add(pl);
@@ -6158,6 +6731,129 @@ function runAction(act) {
     Scene.setSel([pl.id]);
   } else if (act === 'del') {
     sel.forEach(function (x) { Scene.remove(x.id); });
+  } else if (act === 'trig3') {
+    var qA = sel[0], qB = sel[1], qC = sel[2];
+    var w1 = { x: qA.x - qB.x, y: qA.y - qB.y }, w2 = { x: qC.x - qB.x, y: qC.y - qB.y };
+    var l1 = Math.hypot(w1.x, w1.y), l2 = Math.hypot(w2.x, w2.y);
+    if (!l1 || !l2) { toast('三个点需要两两不同', 'warn'); return; }
+    var dotv = w1.x * w2.x + w1.y * w2.y;
+    var angv = Math.acos(Math.max(-1, Math.min(1, dotv / (l1 * l2))));
+    var degv = G.deg(angv);
+    var res = {
+      title: '∠' + qA.name + qB.name + qC.name + ' 的三角值',
+      value: degv,
+      steps: [
+        { text: '角的顶点：' + qB.name + '（按选择顺序取中间点）' },
+        { text: '∠' + qA.name + qB.name + qC.name + ' = ' + G.fmt(degv) + '° = ' + G.fmt(angv) + ' rad' },
+        { text: 'sin = ' + trigFmt(Math.sin(angv)) },
+        { text: 'cos = ' + trigFmt(Math.cos(angv)) },
+        { text: 'tan = ' + trigFmt(Math.tan(angv)) }
+      ]
+    };
+    showResult(res);
+  } else if (act === 'frame') {
+    var FO = sel[0];
+    var hx = window.prompt('x 轴方向（输入两点名，如 AB 表示 A→B；留空则自动补齐）：', '');
+    if (hx === null) return;
+    var hy = window.prompt('y 轴方向（输入两点名，如 AC；与 x 轴至少填一个）：', '');
+    if (hy === null) return;
+    hx = (hx || '').trim().toUpperCase();
+    hy = (hy || '').trim().toUpperCase();
+    var findPt = function (nm) {
+      return Scene.objs.filter(function (o) { return o.type === 'point' && o.mode === FO.mode; })
+        .find(function (p) { return (p.name || '').toUpperCase() === nm; });
+    };
+    var parsePair = function (str) {
+      var S = String(str || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (S.length < 2) return null;
+      for (var i = 1; i < S.length; i++) {
+        var q1 = findPt(S.slice(0, i)), q2 = findPt(S.slice(i));
+        if (q1 && q2) return { a: q1, b: q2 };
+      }
+      return null;
+    };
+    var hxV = null, hyV = null;
+    var pr1 = parsePair(hx), pr2 = parsePair(hy);
+    if (pr1) hxV = { x: pr1.b.x - pr1.a.x, y: pr1.b.y - pr1.a.y, z: (pr1.b.z || 0) - (pr1.a.z || 0) };
+    if (pr2) hyV = { x: pr2.b.x - pr2.a.x, y: pr2.b.y - pr2.a.y, z: (pr2.b.z || 0) - (pr2.a.z || 0) };
+    if (!hxV && !hyV) { toast('至少需要一个有效方向（两个点名，如 AB）', 'warn'); return; }
+    if (!hxV) { hxV = { x: -hyV.y, y: hyV.x, z: 0 }; }
+    if (!hyV) { hyV = { x: -hxV.y, y: hxV.x, z: 0 }; }
+    var nl = function (v) { var L = Math.hypot(v.x, v.y, v.z || 0) || 1; return { x: v.x / L, y: v.y / L, z: (v.z || 0) / L }; };
+    var ex1 = nl(hxV), ey1 = nl(hyV);
+    var L0 = 2.2;
+    var px1 = G.mkp(null, FO.x + ex1.x * L0, FO.y + ex1.y * L0, (FO.z || 0) + ex1.z * L0);
+    var py1 = G.mkp(null, FO.x + ey1.x * L0, FO.y + ey1.y * L0, (FO.z || 0) + ey1.z * L0);
+    var ax1 = G.mkseg(FO, px1, 'x′轴');
+    var ax2 = G.mkseg(FO, py1, 'y′轴');
+    var madeIds = [ax1.id, ax2.id];
+    if (Scene.mode === 'solid') {
+      var ez = { x: ex1.y * ey1.z - ex1.z * ey1.y, y: ex1.z * ey1.x - ex1.x * ey1.z, z: ex1.x * ey1.y - ex1.y * ey1.x };
+      ez = nl(ez);
+      var pz1 = G.mkp(null, FO.x + ez.x * L0, FO.y + ez.y * L0, (FO.z || 0) + ez.z * L0);
+      madeIds.push(G.mkseg(FO, pz1, 'z′轴').id);
+    }
+    G.frame = { o: FO.id, ex: ex1, ey: ey1 };
+    toast('已以 ' + FO.name + ' 为原点建系，坐标轴（x′/y′' + (Scene.mode === 'solid' ? '/z′' : '') + '）已画出', 'ok');
+    Scene.setSel(madeIds);
+  } else if (act === 'combine3d') {
+    var faces = sel.filter(function (o) { return o.type === 'poly'; });
+    if (faces.length < 4) { toast('至少需要 4 个面才能组合', 'warn'); return; }
+    var edgeCnt = {};
+    var allPts = [];
+    faces.forEach(function (fc) {
+      var qs = (fc.pids || []).map(function (id) { return Scene.byId(id); });
+      if (qs.indexOf(null) >= 0 || qs.length < 3) return;
+      allPts = allPts.concat(qs);
+      for (var i = 0; i < qs.length; i++) {
+        var a = qs[i], b = qs[(i + 1) % qs.length];
+        var k = Math.min(a.id, b.id) + '_' + Math.max(a.id, b.id);
+        edgeCnt[k] = (edgeCnt[k] || 0) + 1;
+      }
+    });
+    var ekeys = Object.keys(edgeCnt);
+    var bad = ekeys.filter(function (k) { return edgeCnt[k] !== 2; });
+    if (bad.length) { toast('未构成封闭立体：有 ' + bad.length + ' 条边不满足「恰好被 2 个面共享」', 'warn'); return; }
+    /* 体积：以全部顶点中心为参考点，各面三角剖分求有向四面体体积和 */
+    var cx0 = 0, cy0 = 0, cz0 = 0;
+    allPts.forEach(function (p) { cx0 += p.x; cy0 += p.y; cz0 += (p.z || 0); });
+    cx0 /= allPts.length; cy0 /= allPts.length; cz0 /= allPts.length;
+    var vol = 0;
+    faces.forEach(function (fc) {
+      var qs = (fc.pids || []).map(function (id) { return Scene.byId(id); });
+      /* 统一面朝向：外法向与「面心-体心」同向，否则翻转顶点序（保证不互相抵消） */
+      var fcx = 0, fcy = 0, fcz = 0;
+      qs.forEach(function (p) { fcx += p.x; fcy += p.y; fcz += (p.z || 0); });
+      fcx /= qs.length; fcy /= qs.length; fcz /= qs.length;
+      var nx = 0, ny = 0, nz = 0;
+      for (var k2 = 0; k2 < qs.length; k2++) {
+        var q1 = qs[k2], q2 = qs[(k2 + 1) % qs.length];
+        nx += (q1.y - q2.y) * ((q1.z || 0) + (q2.z || 0));
+        ny += ((q1.z || 0) - (q2.z || 0)) * (q1.x + q2.x);
+        nz += (q1.x - q2.x) * (q1.y + q2.y);
+      }
+      if (((fcx - cx0) * nx + (fcy - cy0) * ny + (fcz - cz0) * nz) < 0) qs = qs.slice().reverse();
+      for (var i = 1; i < qs.length - 1; i++) {
+        var A = qs[0], B = qs[i], C = qs[i + 1];
+        var ax = A.x - cx0, ay = A.y - cy0, az = (A.z || 0) - cz0;
+        var bx = B.x - cx0, by = B.y - cy0, bz = (B.z || 0) - cz0;
+        var ccx = C.x - cx0, ccy = C.y - cy0, ccz = (C.z || 0) - cz0;
+        vol += (ax * (by * ccz - bz * ccy) + ay * (bz * ccx - bx * ccz) + az * (bx * ccy - by * ccx)) / 6;
+      }
+    });
+    vol = Math.abs(vol);
+    var resC = {
+      title: '组合立体 · 封闭校验通过',
+      value: vol,
+      steps: [
+        { text: '面数：' + faces.length + '，边数：' + ekeys.length + '（每条边恰好被 2 个面共享 ✓）' },
+        { text: '体积 V = ' + G.fmt(vol) + (G.exact(vol) ? '（= ' + G.exact(vol) + '）' : '') },
+        { text: '说明：按各面三角剖分 + 参考点四面体求和，适用于闭合多面体' }
+      ]
+    };
+    G.comboFaces = faces.map(function (f) { return f.id; });
+    toast('组合成立体：封闭校验通过，体积已算出', 'ok');
+    showResult(resC);
   } else if (act === 'clearsel') {
     Scene.setSel([]);
   } else if (act === 'copy-result') {
@@ -6598,8 +7294,14 @@ function bind() {
     showPane(pid);
   });
   /* 添加按钮 */
-  $('btn-add-func').addEventListener('click', function () { try { addFuncStr($('input-func').value.trim()); $('input-func').value = ''; renderAll(); } catch (e) { toast(e.message, 'warn'); } });
-  $('input-func').addEventListener('keydown', function (e) { if (e.key === 'Enter') { $('btn-add-func').click(); } });
+  $('btn-add-func').addEventListener('click', function () {
+    try {
+      var _s = $('input-func').value.trim();
+      if (G.editingExpr) { applyExprEdit(_s); }
+      else { addFuncStr(_s); $('input-func').value = ''; renderAll(); }
+    } catch (e) { toast(e.message, 'warn'); }
+  });
+  $('input-func').addEventListener('keydown', function (e) { if (e.key === 'Enter') { $('btn-add-func').click(); } else if (e.key === 'Escape' && G.editingExpr) { endExprEdit(false); toast('已取消修改', 'info'); } });
   $('btn-add-point').addEventListener('click', function () { try { addPointStr($('input-point').value.trim()); $('input-point').value = ''; renderAll(); } catch (e) { toast(e.message, 'warn'); } });
   $('input-point').addEventListener('keydown', function (e) { if (e.key === 'Enter') { $('btn-add-point').click(); } });
   $('btn-add-vec').addEventListener('click', function () { try { addVecStr($('input-vec').value.trim()); $('input-vec').value = ''; renderAll(); } catch (e) { toast(e.message, 'warn'); } });
@@ -6693,6 +7395,96 @@ function bind() {
     }
     renderSel();
   });
+  /* 尺寸编辑（立体）：滑杆拖动实时应用，松开记入历史 */
+  $('sel-info').addEventListener('pointerdown', function (e) {
+    var t = e.target;
+    if (t && t.dataset && t.dataset.dim && t.type === 'range') G.quality = 'fast';
+  });
+  $('sel-info').addEventListener('input', function (e) {
+    var t = e.target;
+    if (!t || !t.dataset || !t.dataset.dim || t.type !== 'range') return;
+    var seg = String(t.dataset.dim).split(':');
+    var o = Scene.byId(parseInt(seg[0], 10));
+    if (!o || !o.dims || !seg[1]) return;
+    var v = G.quantizeDim(seg[1], parseFloat(t.value));
+    if (!isFinite(v)) return;
+    o.dims[seg[1]] = v;
+    o._built = null;
+    var row = t.closest('.param-row');
+    var num = row ? row.querySelector('input[type=number]') : null;
+    if (num) num.value = v;
+    G.requestRender();
+  });
+  $('sel-info').addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t || !t.dataset || !t.dataset.dim) return;
+    var seg = String(t.dataset.dim).split(':');
+    var o = Scene.byId(parseInt(seg[0], 10));
+    if (!o || !o.dims || !seg[1]) return;
+    var v = G.quantizeDim(seg[1], parseFloat(t.value));
+    if (!isFinite(v)) return;
+    o.dims[seg[1]] = v;
+    o._built = null;
+    G.quality = 'high';
+    G.requestRender();
+    G.emit('changed');
+    renderSel();
+  });
+  /* 夹角滑块（两条线段） */
+  $('sel-info').addEventListener('pointerdown', function (e) {
+    var t = e.target;
+    if (t && t.dataset && t.dataset.ang && t.type === 'range') G.quality = 'fast';
+  });
+  $('sel-info').addEventListener('input', function (e) {
+    var t = e.target;
+    if (!t || !t.dataset || !t.dataset.ang || t.type !== 'range') return;
+    var seg = String(t.dataset.ang).split(':');
+    var o1 = Scene.byId(parseInt(seg[0], 10)), o2 = Scene.byId(parseInt(seg[1], 10));
+    if (!o1 || !o2) return;
+    var v = parseFloat(t.value);
+    if (!isFinite(v)) return;
+    if (G.STEP) v = G.quantize(v);
+    v = Math.max(0, Math.min(180, v));
+    applyAngle(o1, o2, v);
+    var row = t.closest('.param-row');
+    var num = row ? row.querySelector('input[type=number]') : null;
+    if (num) num.value = v;
+  });
+  $('sel-info').addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t || !t.dataset || !t.dataset.ang) return;
+    var seg = String(t.dataset.ang).split(':');
+    var o1 = Scene.byId(parseInt(seg[0], 10)), o2 = Scene.byId(parseInt(seg[1], 10));
+    if (!o1 || !o2) return;
+    var v = parseFloat(t.value);
+    if (!isFinite(v)) return;
+    if (G.STEP) v = G.quantize(v);
+    v = Math.max(0, Math.min(180, v));
+    applyAngle(o1, o2, v);
+    G.quality = 'high';
+    G.emit('changed');
+    renderSel();
+  });
+  /* 调色板点击 */
+  $('sel-info').addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-pal]') : null;
+    if (!b) return;
+    var seg = String(b.dataset.pal).split(':');
+    var o = Scene.byId(parseInt(seg[0], 10));
+    if (!o) return;
+    o.colorIdx = parseInt(seg[1], 10);
+    o.color = G.colorOf(o.colorIdx);
+    G.requestRender();
+    G.emit('changed');
+    renderSel();
+  });
+  /* 修改表达式入口 */
+  $('sel-info').addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-edit-expr]') : null;
+    if (!b) return;
+    var o = Scene.byId(parseInt(b.dataset.editExpr, 10));
+    if (o) startExprEdit(o);
+  });
   $('sel-info').addEventListener('keydown', function (e) {
     if (e.target && e.target.classList && e.target.classList.contains('coord-input') && e.key === 'Enter') {
       e.preventDefault();
@@ -6744,6 +7536,203 @@ function bind() {
   /* 参数拖动全局降密度 */
   $('param-list').addEventListener('pointerdown', function () { G.quality = 'fast'; });
   bindParamEvents();
+  /* 拖拽新建（Word 式） */
+  var btnDC = $('btn-dragcreate'), selCK = $('sel-createkind');
+  if (btnDC) {
+    btnDC.addEventListener('click', function () {
+      G.DRAGCREATE = !G.DRAGCREATE;
+      btnDC.classList.toggle('on', G.DRAGCREATE);
+      btnDC.innerHTML = G.DRAGCREATE ? '✏ 拖拽新建中…' : '✏ 拖拽新建';
+      toast(G.DRAGCREATE ? '拖拽新建已开启：按住画布拖出尺寸框，松手生成' : '拖拽新建已关闭', 'info');
+    });
+  }
+  if (selCK) selCK.addEventListener('change', function () { G.CREATEKIND = this.value; });
+  G.CREATEKIND = 'rect';
+  /* ===== P5：视角（三视图 / 自由）===== */
+  var selView = $('sel-view');
+  if (selView) {
+    selView.addEventListener('change', function () {
+      var v = this.value;
+      var cam = G.cam3;
+      if (!cam) return;
+      if (v === 'front') { G.VIEWLOCK = 'y'; cam.yaw = -Math.PI / 2; cam.pitch = 0.02; }
+      else if (v === 'side') { G.VIEWLOCK = 'x'; cam.yaw = 0; cam.pitch = 0.02; }
+      else if (v === 'top') { G.VIEWLOCK = 'z'; cam.yaw = -Math.PI / 2; cam.pitch = 1.45; }
+      else { G.VIEWLOCK = null; cam.yaw = -0.95; cam.pitch = 0.42; }
+      G.requestRender();
+      toast(v ? '已切换到固定视图：拖拽仅调整允许方向，旋转已锁定' : '已回到自由视角', 'info');
+    });
+  }
+  /* ===== P6：纯净模式 ===== */
+  var btnPure = $('btn-pure');
+  if (btnPure) {
+    btnPure.addEventListener('click', function () {
+      var on = !document.body.classList.contains('pure');
+      document.body.classList.toggle('pure', on);
+      btnPure.innerHTML = on ? '🎦 退出纯净' : '🎦 纯净';
+      try {
+        if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+        else if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+      } catch (e) {}
+      toast(on ? '纯净模式：已隐藏介绍并进入全屏（Esc 可退出全屏）' : '已退出纯净模式', 'info');
+    });
+  }
+  /* ===== P6：预设导出 / 导入 ===== */
+  var btnExp = $('btn-exp');
+  if (btnExp) {
+    btnExp.addEventListener('click', function () {
+      try {
+        var data = serializeScene();
+        data.exportedAt = new Date().toISOString();
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = '几何工坊预设-' + new Date().toISOString().slice(0, 10) + '.json';
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+        toast('已导出预设（' + Scene.objs.length + ' 个对象）', 'ok');
+      } catch (e) { toast('导出失败：' + e.message, 'warn'); }
+    });
+  }
+  var btnImp = $('btn-imp'), impFile = $('impFile');
+  if (btnImp && impFile) {
+    btnImp.addEventListener('click', function () { impFile.click(); });
+    impFile.addEventListener('change', function () {
+      var f = impFile.files && impFile.files[0];
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () {
+        try {
+          var data = JSON.parse(fr.result);
+          if (!window.confirm('导入将替换当前场景（' + (data.objs ? data.objs.length : 0) + ' 个对象），继续？')) return;
+          if (!deserializeScene(data)) throw new Error('文件格式不正确');
+          Scene.setSel([]);
+          renderAll();
+          G.emit('changed');
+          toast('预设导入成功', 'ok');
+        } catch (e) { toast('导入失败：' + e.message, 'warn'); }
+      };
+      fr.readAsText(f);
+      impFile.value = '';
+    });
+  }
+  /* ===== P6：涂鸦层 ===== */
+  var dk = { on: false, drawing: false, erase: false, color: '#ef4444', size: 3, strokes: [] };
+  window.__doodle = dk;
+  try { var ds = localStorage.getItem('geo-doodle-v1'); if (ds) dk.strokes = JSON.parse(ds) || []; } catch (e) {}
+  var dCv = null, dBar = null;
+  function ensureDoodle() {
+    if (dCv) return;
+    var stage = $('stage');
+    if (!stage) return;
+    dCv = document.createElement('canvas');
+    dCv.id = 'doodleCv';
+    stage.appendChild(dCv);
+    dBar = document.createElement('div');
+    dBar.id = 'doodleBar';
+    dBar.innerHTML = '<span style="font-size:12px;color:var(--t3)">画笔</span>' +
+      ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#111827'].map(function (c) {
+        return '<button class="dd-dot' + (c === dk.color ? ' sel' : '') + '" data-dc="' + c + '" style="background:' + c + '"></button>';
+      }).join('') +
+      '<button class="btn btn-ghost btn-sm" id="ddErase">橡皮</button>' +
+      '<button class="btn btn-ghost btn-sm" id="ddClear">清空</button>';
+    stage.appendChild(dBar);
+    var cv = $('canvas');
+    function size() {
+      dCv.width = cv.offsetWidth; dCv.height = cv.offsetHeight;
+      dCv.style.width = cv.offsetWidth + 'px'; dCv.style.height = cv.offsetHeight + 'px';
+      redrawDoodle();
+    }
+    dk.sizeSync = size;
+    size();
+    dBar.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t.dataset && t.dataset.dc) {
+        dk.color = t.dataset.dc; dk.erase = false;
+        dBar.querySelectorAll('.dd-dot').forEach(function (x) { x.classList.toggle('sel', x.dataset.dc === dk.color); });
+        var eb = $('ddErase'); if (eb) eb.classList.remove('on');
+      }
+    });
+    dBar.addEventListener('click', function (e) {
+      if (e.target && e.target.id === 'ddErase') {
+        dk.erase = !dk.erase;
+        e.target.classList.toggle('on', dk.erase);
+      }
+      if (e.target && e.target.id === 'ddClear') {
+        dk.strokes = [];
+        try { localStorage.setItem('geo-doodle-v1', '[]'); } catch (er) {}
+        redrawDoodle();
+        toast('涂鸦已清空（仅清涂鸦层）', 'info');
+      }
+    });
+    dCv.addEventListener('pointerdown', function (e) {
+      dk.drawing = true;
+      try { dCv.setPointerCapture(e.pointerId); } catch (er) {}
+      var r = dCv.getBoundingClientRect();
+      dk.strokes.push({ c: dk.color, w: dk.erase ? 18 : 3, er: dk.erase, pts: [{ x: e.clientX - r.left, y: e.clientY - r.top }] });
+      redrawDoodle();
+    });
+    dCv.addEventListener('pointermove', function (e) {
+      if (!dk.drawing) return;
+      var r = dCv.getBoundingClientRect();
+      var s = dk.strokes[dk.strokes.length - 1];
+      s.pts.push({ x: e.clientX - r.left, y: e.clientY - r.top });
+      redrawDoodle();
+    });
+    function stopD() {
+      if (!dk.drawing) return;
+      dk.drawing = false;
+      try { localStorage.setItem('geo-doodle-v1', JSON.stringify(dk.strokes.slice(-200))); } catch (er) {}
+    }
+    dCv.addEventListener('pointerup', stopD);
+    dCv.addEventListener('pointercancel', stopD);
+    window.addEventListener('resize', function () { if (dk.sizeSync) dk.sizeSync(); });
+  }
+  function redrawDoodle() {
+    if (!dCv) return;
+    var g2 = dCv.getContext('2d');
+    g2.clearRect(0, 0, dCv.width, dCv.height);
+    dk.strokes.forEach(function (s) {
+      g2.save();
+      g2.globalCompositeOperation = s.er ? 'destination-out' : 'source-over';
+      g2.strokeStyle = s.c; g2.lineWidth = s.w; g2.lineCap = 'round'; g2.lineJoin = 'round';
+      g2.beginPath();
+      s.pts.forEach(function (p, i) { if (i === 0) g2.moveTo(p.x, p.y); else g2.lineTo(p.x, p.y); });
+      if (s.pts.length === 1) { g2.lineTo(s.pts[0].x + 0.1, s.pts[0].y); }
+      g2.stroke();
+      g2.restore();
+    });
+  }
+  var btnDoodle = $('btn-doodle');
+  if (btnDoodle) {
+    btnDoodle.addEventListener('click', function () {
+      ensureDoodle();
+      dk.on = !dk.on;
+      document.body.classList.toggle('doodling', dk.on);
+      btnDoodle.innerHTML = dk.on ? '🖊 结束涂鸦' : '🖊 涂鸦';
+      if (dk.sizeSync) dk.sizeSync();
+      toast(dk.on ? '涂鸦层已开启：随手画，绝不改动任何几何对象' : '涂鸦层已关闭（内容仍保留）', 'info');
+    });
+  }
+  /* ===== P6：只读模式 ===== */
+  var btnRo = $('btn-ro'), roBadge = $('roBadge'), roBadgeBtn = $('roBadgeBtn');
+  function setRO(on) {
+    G.READONLY = on;
+    document.body.classList.toggle('ro', on);
+    if (roBadge) roBadge.style.display = on ? 'flex' : 'none';
+    if (btnRo) btnRo.innerHTML = on ? '🔓 退出只读' : '🔒 只读';
+  }
+  if (btnRo) btnRo.addEventListener('click', function () { setRO(!G.READONLY); toast(G.READONLY ? '已进入只读模式：仅可查看与平移缩放' : '已退出只读模式', 'info'); });
+  if (roBadgeBtn) roBadgeBtn.addEventListener('click', function () { setRO(false); toast('已退出只读模式', 'info'); });
+  /* ===== P5：横屏提示 ===== */
+  var rtClose = $('rotateTipClose');
+  if (rtClose) {
+    if (localStorage.getItem('geo-rotate-dismiss') === '1') document.body.classList.add('rotDismissed');
+    rtClose.addEventListener('click', function () {
+      document.body.classList.add('rotDismissed');
+      try { localStorage.setItem('geo-rotate-dismiss', '1'); } catch (e) {}
+    });
+  }
   /* 精度 */
   $('sel-precision').addEventListener('change', function () {
     G.PRECISION = parseInt(this.value, 10) || 3;
@@ -6751,6 +7740,39 @@ function bind() {
     renderSel();
     toast('精度已切换为 ' + this.value + ' 位小数', 'info');
   });
+  /* 步幅（量化） */
+  var selStep = $('sel-step');
+  function applyStepUI() {
+    if (!selStep) return;
+    var std = ['', '0.1', '0.5', '1', '2', '5', '10'];
+    var cur = (G.STEP === null || G.STEP === undefined) ? '' : String(G.STEP);
+    var opt = selStep.querySelector('option[value="custom"]');
+    if (std.indexOf(cur) >= 0) { selStep.value = cur; if (opt) opt.textContent = '步幅 自定义…'; }
+    else { if (opt) opt.textContent = '步幅 ' + cur + '（自定义）'; selStep.value = 'custom'; }
+  }
+  if (selStep) {
+    selStep.addEventListener('change', function () {
+      var v = this.value;
+      if (v === 'custom') {
+        var inp = window.prompt('自定义步幅（正数，例如 0.25 或 3）：', G.STEP || '');
+        if (inp === null) { applyStepUI(); return; }
+        var num = parseFloat(inp);
+        if (!isFinite(num) || num <= 0) { toast('步幅需为正数，已保持原值', 'warn'); applyStepUI(); return; }
+        G.STEP = Math.round(num * 1e6) / 1e6;
+      } else if (v === '') {
+        G.STEP = null;
+      } else {
+        G.STEP = parseFloat(v);
+      }
+      try { localStorage.setItem('geo-step', G.STEP === null ? '' : String(G.STEP)); } catch (e) {}
+      applyStepUI();
+      renderParams();
+      renderSel();
+      toast(G.STEP === null ? '步幅：无限制（自由拖动）' : '步幅已设为 ' + G.STEP + ' 的整数倍', 'info');
+    });
+  }
+  try { var _st = localStorage.getItem('geo-step'); if (_st) G.STEP = parseFloat(_st) || null; } catch (e) {}
+  applyStepUI();
   /* 撤销 / 重做 */
   $('btn-undo').addEventListener('click', undo);
   $('btn-redo').addEventListener('click', redo);
@@ -6831,7 +7853,7 @@ function bind() {
   G.on('selection', function () { renderObjList(); renderSel(); });
   /* 选择数量达到上限 */
   G.on('sel-limit', function (n) {
-    toast('最多同时选择 ' + n + ' 个对象；点空白处可清空重选', 'info');
+    toast('已选择 ' + n + ' 个对象；点空白处可清空重选', 'info');
   });
   /* 场景变更 → 撤销历史 + 自动保存（350ms 内的高频变更合并为一步） */
   G.on('changed', function () {
