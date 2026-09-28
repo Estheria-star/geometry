@@ -734,14 +734,18 @@ body.pure.fold-l.fold-r .studio-body{grid-template-columns:0 minmax(0,1fr) 0}
 #panel-left,#panel-right{transition:border-color .3s}
 body.pure.fold-l #panel-left{border-right-color:transparent}
 body.pure.fold-r #panel-right{border-left-color:transparent}
-.fold-tab{position:absolute;top:50%;transform:translateY(-50%);z-index:26;display:none;flex-direction:column;align-items:center;gap:7px;
-  width:25px;padding:10px 0;border:0;border-radius:9px;cursor:pointer;
-  background:rgba(17,24,39,.48);color:#fff;
+.fold-tab{position:absolute;top:50%;transform:translateY(-50%);z-index:32;display:none;flex-direction:column;align-items:center;gap:7px;
+  width:28px;padding:12px 0;border:0;border-radius:10px;cursor:pointer;
+  background:rgba(17,24,39,.52);color:#fff;
   -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
-  font-size:11px;font-weight:600;letter-spacing:2px;writing-mode:vertical-rl;line-height:1;
-  box-shadow:0 4px 14px rgba(0,0,0,.18);transition:background .2s,opacity .2s;opacity:.92}
-.fold-tab:hover{background:rgba(17,24,39,.75);opacity:1}
+  font-size:11px;font-weight:700;letter-spacing:2px;writing-mode:vertical-rl;line-height:1;
+  box-shadow:0 4px 14px rgba(0,0,0,.22);transition:background .2s,box-shadow .2s,transform .2s;opacity:.94}
+.fold-tab:hover{background:rgba(17,24,39,.8);opacity:1;transform:translateY(-50%) scale(1.06)}
 .fold-tab .fold-chev{font-size:10px;letter-spacing:0;writing-mode:horizontal-tb}
+/* 对应面板处于收起状态 → 把手高亮品牌蓝，提示「点我展开」（展开后回到低调深色） */
+.fold-tab.is-folded{background:linear-gradient(165deg,rgba(59,130,246,.95),rgba(137,194,255,.88));
+  box-shadow:0 6px 20px rgba(37,99,235,.45),inset 0 0 0 1px rgba(255,255,255,.28);opacity:1}
+.fold-tab.is-folded:hover{background:linear-gradient(165deg,#3b82f6,#89c2ff)}
 body.pure .fold-tab{display:flex}
 #foldLeft{left:6px}
 #foldRight{right:6px}
@@ -7744,12 +7748,16 @@ function bind() {
     var l = document.body.classList.contains('fold-l');
     var r = document.body.classList.contains('fold-r');
     if (foldL) {
+      foldL.classList.toggle('is-folded', l);
       foldL.innerHTML = '<span class="fold-chev">' + (l ? '❯' : '❮') + '</span><span>输入</span>';
       foldL.title = (l ? '展开' : '收起') + '输入面板（纯净模式）';
+      foldL.setAttribute('aria-expanded', l ? 'false' : 'true');
     }
     if (foldR) {
+      foldR.classList.toggle('is-folded', r);
       foldR.innerHTML = '<span class="fold-chev">' + (r ? '❮' : '❯') + '</span><span>读数</span>';
       foldR.title = (r ? '展开' : '收起') + '读数面板（纯净模式）';
+      foldR.setAttribute('aria-expanded', r ? 'false' : 'true');
     }
   }
   function toggleFold(cls) {
@@ -7866,12 +7874,21 @@ function bind() {
     stage.appendChild(dBar);
     var cv = $('canvas');
     function size() {
-      dCv.width = cv.offsetWidth; dCv.height = cv.offsetHeight;
-      dCv.style.width = cv.offsetWidth + 'px'; dCv.style.height = cv.offsetHeight + 'px';
+      /* 同步尺寸并做 DPR 高清（笔迹在高分屏 / 投屏下不糊） */
+      var dpr = Math.min(2.5, window.devicePixelRatio || 1);
+      var w = cv.offsetWidth, h = cv.offsetHeight;
+      dCv.width = Math.round(w * dpr); dCv.height = Math.round(h * dpr);
+      dCv.style.width = w + 'px'; dCv.style.height = h + 'px';
+      dCv._dpr = dpr;
       redrawDoodle();
     }
     dk.sizeSync = size;
     size();
+    /* stage 尺寸变化即同步：面板折叠 / 纯净模式 / 布局切换都不触发 window.resize，
+       之前只靠 window.resize → 涂鸦层尺寸滞留 → 超出区域的落笔被主画布接管（画不上） */
+    if (window.ResizeObserver) {
+      new ResizeObserver(function () { if (dk.sizeSync) dk.sizeSync(); }).observe(stage);
+    }
     dBar.addEventListener('click', function (e) {
       var t = e.target;
       if (t.dataset && t.dataset.dc) {
@@ -7918,7 +7935,9 @@ function bind() {
   function redrawDoodle() {
     if (!dCv) return;
     var g2 = dCv.getContext('2d');
-    g2.clearRect(0, 0, dCv.width, dCv.height);
+    var dpr = dCv._dpr || 1;
+    g2.setTransform(dpr, 0, 0, dpr, 0, 0);           /* 逻辑坐标 → 物理像素 */
+    g2.clearRect(0, 0, dCv.width / dpr, dCv.height / dpr);
     dk.strokes.forEach(function (s) {
       g2.save();
       g2.globalCompositeOperation = s.er ? 'destination-out' : 'source-over';
@@ -7929,6 +7948,7 @@ function bind() {
       g2.stroke();
       g2.restore();
     });
+    g2.setTransform(1, 0, 0, 1, 0, 0);
   }
   var btnDoodle = $('btn-doodle');
   if (btnDoodle) {
