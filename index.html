@@ -721,6 +721,17 @@ body.doodling #doodleBar{display:flex}
 #doodleBar .dd-dot.sel{border-color:var(--t1)}
 #doodleBar button.btn{padding:5px 10px}
 
+
+/* ============================================================
+   对象列表 · 父子树
+   ============================================================ */
+.obj-toggle{width:18px;height:18px;flex:0 0 auto;border:0;background:transparent;color:var(--t3);cursor:pointer;font-size:11px;line-height:1;padding:0;border-radius:5px}
+.obj-toggle:hover{background:var(--line)}
+.obj-toggle.ph{visibility:hidden;display:inline-block}
+.obj-row.child{padding-left:28px;background:rgba(0,0,0,.015)}
+.obj-row.child .name{font-size:12.5px}
+.obj-row.child .swatch{width:8px;height:8px}
+
 /* ============================================================
    12. 全局补充与无障碍
    ============================================================ */
@@ -2402,8 +2413,18 @@ var Scene = G.Scene = {
     _visited[id] = 1;
     var i = Scene.objs.findIndex(function (o) { return o.id === id; });
     if (i < 0) return;
+    var _rm = Scene.objs[i];
+    if (_rm._solid) return;   /* 几何体标点随几何体联动，不可单独删除 */
     Scene.objs.splice(i, 1);
     Scene.selection = Scene.selection.filter(function (s) { return s !== id; });
+    if (_rm.type === 'solid') {
+      /* 删除几何体 → 连带移除其标点 */
+      Scene.objs.filter(function (x) { return x._solid === id; }).forEach(function (x) {
+        Scene.selection = Scene.selection.filter(function (s) { return s !== x.id; });
+        var j = Scene.objs.indexOf(x);
+        if (j >= 0) Scene.objs.splice(j, 1);
+      });
+    }
     /* 级联：依赖被删对象的图形一并删除 */
     var dependedOn = Scene.objs.filter(function (x) {
       return x.pids && x.pids.indexOf(id) >= 0;
@@ -4373,7 +4394,8 @@ function buildSphere(r, nu, nv) {
   return { verts: verts, faces: faces, wire: wire };
 }
 function buildSolidObj(o) {
-  var key = JSON.stringify(o.dims) + o.kind;
+  /* 缓存键包含 尺寸 + 类型 + 位置：任何路径修改位置/尺寸都会自动失效，不依赖调用者手动清缓存 */
+  var key = JSON.stringify(o.dims) + '|' + o.kind + '|' + (o.cx || 0) + ',' + (o.cy || 0) + ',' + (o.cz || 0);
   if (o._built && o._builtKey === key) return o._built;
   var d = o.dims, b = null;
   switch (o.kind) {
@@ -4396,6 +4418,59 @@ function buildSolidObj(o) {
   o._built = b; o._builtKey = key;
   return b;
 }
+/* ===== 几何体自带标点：顶点/特征点生成（随几何体自动创建、同步、销毁）===== */
+G.solidKeyPts = function (o) {
+  var cx = o.cx || 0, cy = o.cy || 0, cz = o.cz || 0;
+  var d = o.dims || {};
+  if (o.kind === 'cylinder' || o.kind === 'frustum' || o.kind === 'cone') {
+    return [{ x: cx, y: cy, z: cz }, { x: cx, y: cy, z: cz + (d.h || 1) }];
+  }
+  if (o.kind === 'sphere') {
+    return [{ x: cx, y: cy, z: cz }];
+  }
+  var b = buildSolidObj(o);
+  return b.verts.map(function (p) { return { x: p.x, y: p.y, z: p.z }; });
+};
+G.ensureSolidPts = function (o) {
+  var want = G.solidKeyPts(o);
+  if (!o._ptIds) o._ptIds = [];
+  var alive = o._ptIds.filter(function (id) { return !!Scene.byId(id); });
+  if (alive.length !== o._ptIds.length || o._ptIds.length !== want.length) {
+    /* 数量不一致（首建 / 边数变化 / 点被外部移除）→ 全部重建 */
+    o._ptIds.forEach(function (id) {
+      var idx = Scene.objs.findIndex(function (x) { return x.id === id; });
+      if (idx >= 0) Scene.objs.splice(idx, 1);
+    });
+    o._ptIds = [];
+    want.forEach(function (q, i) {
+      var pt = { type: 'point', mode: 'solid', name: G.namePoint(), x: q.x, y: q.y, z: q.z, params: [] };
+      pt._solid = o.id; pt._vslot = i;
+      pt.id = Scene.nextId++;
+      pt.colorIdx = G.nextColorIdx();
+      pt.color = G.colorOf(pt.colorIdx);
+      pt.visible = true;
+      Scene.objs.push(pt);
+      o._ptIds.push(pt.id);
+    });
+    G._ptsDirty = true; /* 标点集合变化 → 绘制结束后刷新对象列表（父子树） */
+  } else {
+    want.forEach(function (q, i) {
+      var pt = Scene.byId(o._ptIds[i]);
+      if (pt) { pt.x = q.x; pt.y = q.y; pt.z = q.z; }
+    });
+  }
+};
+G.sweepSolidPts = function () {
+  for (var i = Scene.objs.length - 1; i >= 0; i--) {
+    var o = Scene.objs[i];
+    if (o._solid && !Scene.byId(o._solid)) {
+      Scene.selection = Scene.selection.filter(function (s) { return s !== o.id; });
+      Scene.objs.splice(i, 1);
+      G._ptsDirty = true;
+    }
+  }
+};
+
 /* 几何体尺寸定义（选中时生成滑块） */
 G.solidDimsDef = function (kind) {
   var defs = {
@@ -4458,7 +4533,17 @@ G.quantizeDim = function (key, v) {
    3. 绘制
    ============================================================ */
 function solidObjs() {
-  return Scene.objs.filter(function (o) { return o.visible && o.mode === 'solid'; });
+  /* 标点联动：低频清理孤儿点（几何体已删除的标点） */
+  if (!G._sweepAt || Date.now() - G._sweepAt > 800) {
+    G._sweepAt = Date.now();
+    G.sweepSolidPts();
+  }
+  return Scene.objs.filter(function (o) {
+    if (!o.visible || o.mode !== 'solid') return false;
+    /* 自带标点：源几何体隐藏时一并隐藏 */
+    if (o._solid) { var s = Scene.byId(o._solid); if (!s || !s.visible) return false; }
+    return true;
+  });
 }
 
 function drawGround() {
@@ -4505,6 +4590,7 @@ function pushFace(list, worldPts, depth, fill, stroke) {
   list.push({ poly: sp, depth: depth, fill: fill, stroke: stroke || null });
 }
 function collectSolid(o, P, list, lines) {
+  G.ensureSolidPts(o);   /* 绘制时自动生成 / 同步标点 */
   var b = buildSolidObj(o);
   var i, j;
   var alpha = (o.kind === 'sphere') ? 0.09 : (o.kind === 'cylinder' || o.kind === 'cone' || o.kind === 'frustum') ? 0.11 : C().fillA;
@@ -4931,6 +5017,9 @@ function draw3D() {
   drawDiagram3();
 
   G.emit('hud3d', { dist: cam.dist, yaw: cam.yaw, pitch: cam.pitch });
+
+  /* 标点集合发生增删（如几何体首次绘制自动生成标点）→ 绘制结束后刷新对象列表 */
+  if (G._ptsDirty) { G._ptsDirty = false; G.emit('objects'); }
 }
 
 /* ============================================================
@@ -5363,7 +5452,18 @@ G.pointer3D = function (type, e, p) {
       var hit = pan ? null : pick3(p.x, p.y);
       if (G.READONLY) hit = null;   /* 只读模式：不允许拖动点/几何体/函数 */
       st3.hit = hit;
-      if (hit && hit.type === 'point') {
+      if (hit && hit.type === 'point' && hit._solid) {
+        /* 几何体标点：拖动它 = 拖动整个几何体（标点随体联动，不能单独移动） */
+        var _so = Scene.byId(hit._solid);
+        if (_so) {
+          st3.kind = 'dragsolid';
+          st3.solid = _so;
+          st3.sx0 = _so.cx || 0; st3.sy0 = _so.cy || 0;
+          st3.startZ = _so.cz || 0;
+          st3.vertical = !!(e.ctrlKey || e.metaKey);
+          st3.base = screenToZPlane(p.x, p.y, st3.startZ);
+        }
+      } else if (hit && hit.type === 'point') {
         st3.kind = 'dragpt';
         st3.startWorld = { x: hit.x, y: hit.y, z: hit.z || 0 };
         st3.planeZ = hit.z || 0;
@@ -5855,26 +5955,47 @@ function typeLabel(o) {
   if (o.type === 'vector') return o._expr ? '含参向量' : '向量';
   return G.TYPE_LABEL[o.type] || o.type;
 }
+/* ===== 对象列表 · 父子树（图形 ▸ 依赖的点；可收起展开，状态持久化）===== */
+var OBJ_EXPANDED = {};
+try { OBJ_EXPANDED = JSON.parse(localStorage.getItem('geo-expand') || '{}') || {}; } catch (e) { OBJ_EXPANDED = {}; }
+function expandPersist() { try { localStorage.setItem('geo-expand', JSON.stringify(OBJ_EXPANDED)); } catch (e) {} }
+function objChildPts(o) {
+  var kids = [];
+  (o.pids || []).forEach(function (id) { var p = Scene.byId(id); if (p) kids.push(p); });
+  if (o.cid) { var c = Scene.byId(o.cid); if (c) kids.push(c); }
+  if (o._ptIds) o._ptIds.forEach(function (id) { var p = Scene.byId(id); if (p) kids.push(p); });
+  return kids;
+}
+function objRowHTML(o, depth) {
+  var kids = objChildPts(o);
+  var exp = !!OBJ_EXPANDED[o.id];
+  var tog = kids.length
+    ? '<button class="obj-op obj-toggle" data-op="toggle" title="收起 / 展开关联对象">' + (exp ? '▾' : '▸') + '</button>'
+    : '<span class="obj-toggle ph">·</span>';
+  return '<li class="obj-row' + (Scene.isSel(o.id) ? ' sel' : '') + (depth ? ' child' : '') + '" data-id="' + o.id + '">' +
+    tog +
+    '<span class="swatch" style="background:' + o.color + '"></span>' +
+    '<span class="name" title="双击可重命名">' + esc(o.name || '') + '</span>' +
+    '<span class="type">' + esc(typeLabel(o)) + (kids.length ? ' · ' + kids.length : '') + '</span>' +
+    '<span class="ops">' +
+      '<button class="obj-op" data-op="rename" title="重命名">' + svgIc('i-edit') + '</button>' +
+      '<button class="obj-op" data-op="eye" title="显示 / 隐藏">' + svgIc(o.visible ? 'i-eye' : 'i-eye-off') + '</button>' +
+      '<button class="obj-op" data-op="del" title="删除">' + svgIc('i-trash') + '</button>' +
+    '</span></li>' +
+    (exp && kids.length ? kids.map(function (k) { return objRowHTML(k, depth + 1); }).join('') : '');
+}
 function renderObjList() {
   var list = $('obj-list');
   if (!list) return;
-  var objs = Scene.objs.filter(function (o) { return (o.mode || 'plane') === Scene.mode; });
-  $('obj-count').textContent = objs.length;
-  if (!objs.length) {
+  var modeObjs = Scene.objs.filter(function (o) { return (o.mode || 'plane') === Scene.mode; });
+  var roots = modeObjs.filter(function (o) { return !o._solid; });   /* 标点只作为子项出现 */
+  var cnt = $('obj-count');
+  if (cnt) cnt.textContent = modeObjs.length;
+  if (!roots.length) {
     list.innerHTML = '<li class="obj-empty">暂无对象，从上方输入或点击图形创建</li>';
     return;
   }
-  list.innerHTML = objs.map(function (o) {
-    return '<li class="obj-row' + (Scene.isSel(o.id) ? ' sel' : '') + '" data-id="' + o.id + '">' +
-      '<span class="swatch" style="background:' + o.color + '"></span>' +
-      '<span class="name" title="双击可重命名">' + esc(o.name || '') + '</span>' +
-      '<span class="type">' + esc(typeLabel(o)) + '</span>' +
-      '<span class="ops">' +
-        '<button class="obj-op" data-op="rename" title="重命名">' + svgIc('i-edit') + '</button>' +
-        '<button class="obj-op" data-op="eye" title="显示 / 隐藏">' + svgIc(o.visible ? 'i-eye' : 'i-eye-off') + '</button>' +
-        '<button class="obj-op" data-op="del" title="删除">' + svgIc('i-trash') + '</button>' +
-      '</span></li>';
-  }).join('');
+  list.innerHTML = roots.map(function (o) { return objRowHTML(o, 0); }).join('');
 }
 
 /* ============================================================
@@ -7153,6 +7274,7 @@ function serializeScene() {
     params: Scene.params, objs: []
   };
   Scene.objs.forEach(function (o) {
+    if (o._solid) return;   /* 几何体标点不序列化（随几何体自动重建） */
     var rec = null;
     if (o.type === 'func' || o.type === 'surface') {
       rec = { t: o.type, name: o.name, display: o.display, mode: o.mode };
@@ -7338,7 +7460,16 @@ function bind() {
     if (op) {
       var o = Scene.byId(id);
       if (!o) return;
-      if (op.dataset.op === 'del') { Scene.remove(id); toast('已删除 ' + o.name, 'info'); }
+      if (op.dataset.op === 'toggle') {
+        OBJ_EXPANDED[id] = !OBJ_EXPANDED[id];
+        expandPersist();
+        renderObjList();
+        return;
+      }
+      if (op.dataset.op === 'del') {
+        if (o._solid) { toast('几何体标点随几何体联动，不能单独删除（删除几何体会连带移除）', 'info'); return; }
+        Scene.remove(id); toast('已删除 ' + o.name, 'info');
+      }
       else if (op.dataset.op === 'rename') { startRename(row, o); return; }
       else { o.visible = !o.visible; G.emit('objects'); G.requestRender(); }
       renderAll();
