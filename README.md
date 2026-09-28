@@ -2,5 +2,5 @@
 
 平面几何与立体几何可视化工作台：函数方程实时绘制、向量关系自动判定、面积体积距离二面角一键求解、参数滑块实时联动。
 
-- 在线：https://jihe.startian.top/（部署中，暂可经 https://startian.top/jihe/ 访问）
+- 在线：https://geometry.startian.top/（部署中，暂可经 https://www.startian.top/geometry/ 访问）
 - 源文件：桌面 `几何工坊.html`（本仓库为发布副本）
