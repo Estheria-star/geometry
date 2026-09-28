@@ -712,7 +712,9 @@ body.rotDismissed #rotateTip{display:none !important}
 body.ro #action-grid button, body.ro #sel-info button, body.ro #sel-info input, body.ro #param-list input,
 body.ro .studio-actions button, body.ro #btn-dragcreate, body.ro #sel-createkind, body.ro #sel-step,
 body.ro #menu-samples button, body.ro .panel-scroll button, body.ro .panel-scroll input { pointer-events:none !important; opacity:.55 }
-body.pure .topnav, body.pure section.hero, body.pure section.features, body.pure section.faq, body.pure section.contact, body.pure footer { display:none !important }
+body.pure .topnav, body.pure section.hero, body.pure section.features, body.pure section.faq, body.pure section.contact, body.pure footer, body.pure .studio .sec-head { display:none !important }
+body.pure .studio{padding:16px 0 40px}
+body.pure .studio .container{width:calc(100% - 24px)}
 #doodleCv{position:absolute;left:0;top:0;z-index:30;touch-action:none;cursor:crosshair;display:none}
 body.doodling #doodleCv{display:block}
 #doodleBar{position:absolute;right:12px;top:12px;z-index:40;display:none;gap:8px;align-items:center;background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:999px;padding:7px 12px;box-shadow:0 10px 24px rgba(0,0,0,.12)}
@@ -721,6 +723,40 @@ body.doodling #doodleBar{display:flex}
 #doodleBar .dd-dot.sel{border-color:var(--t1)}
 #doodleBar button.btn{padding:5px 10px}
 
+
+/* ============================================================
+   P6.5：纯净模式 · 两侧面板折叠（画布铺满全屏）+ 返回主页
+   ============================================================ */
+body.pure .studio-body{transition:grid-template-columns .34s var(--ease),height .34s var(--ease);height:calc(100vh - 136px);min-height:520px}
+body.pure.fold-l .studio-body{grid-template-columns:0 minmax(0,1fr) 312px}
+body.pure.fold-r .studio-body{grid-template-columns:292px minmax(0,1fr) 0}
+body.pure.fold-l.fold-r .studio-body{grid-template-columns:0 minmax(0,1fr) 0}
+#panel-left,#panel-right{transition:border-color .3s}
+body.pure.fold-l #panel-left{border-right-color:transparent}
+body.pure.fold-r #panel-right{border-left-color:transparent}
+.fold-tab{position:absolute;top:50%;transform:translateY(-50%);z-index:26;display:none;flex-direction:column;align-items:center;gap:7px;
+  width:25px;padding:10px 0;border:0;border-radius:9px;cursor:pointer;
+  background:rgba(17,24,39,.48);color:#fff;
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  font-size:11px;font-weight:600;letter-spacing:2px;writing-mode:vertical-rl;line-height:1;
+  box-shadow:0 4px 14px rgba(0,0,0,.18);transition:background .2s,opacity .2s;opacity:.92}
+.fold-tab:hover{background:rgba(17,24,39,.75);opacity:1}
+.fold-tab .fold-chev{font-size:10px;letter-spacing:0;writing-mode:horizontal-tb}
+body.pure .fold-tab{display:flex}
+#foldLeft{left:6px}
+#foldRight{right:6px}
+@media (max-width:1060px){ body.pure .fold-tab{display:none} }
+/* 返回主页（全站统一按钮 · 以后新项目都带） */
+.wb-home{position:fixed;left:14px;bottom:14px;z-index:9990;display:inline-flex;align-items:center;gap:5px;
+  padding:8px 13px 8px 10px;border-radius:999px;text-decoration:none;
+  background:rgba(17,24,39,.55);color:#fff;font-size:12.5px;font-weight:600;letter-spacing:.3px;
+  -webkit-backdrop-filter:blur(10px) saturate(1.3);backdrop-filter:blur(10px) saturate(1.3);
+  border:1px solid rgba(255,255,255,.14);box-shadow:0 6px 18px rgba(0,0,0,.18);
+  transition:background .2s,transform .2s,box-shadow .2s}
+.wb-home:hover{background:rgba(17,24,39,.78);transform:translateY(-1px);box-shadow:0 10px 24px rgba(0,0,0,.26)}
+.wb-home:active{transform:translateY(0)}
+.wb-home svg{width:13px;height:13px;flex:0 0 auto}
+@media (max-width:620px){ .wb-home{left:10px;bottom:10px;padding:7px 11px 7px 9px;font-size:12px} }
 
 /* ============================================================
    对象列表 · 父子树
@@ -1082,6 +1118,8 @@ body.doodling #doodleBar{display:flex}
             <button class="btn btn-ghost btn-xs" data-drawer="panel-left"><svg class="ic" style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-plus"/></svg>输入</button>
             <button class="btn btn-ghost btn-xs" data-drawer="panel-right"><svg class="ic" style="width:13px;height:13px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-sliders"/></svg>读数</button>
           </div>
+          <button class="fold-tab" id="foldLeft" type="button" title="收起 / 展开输入面板（纯净模式）" aria-label="收起或展开输入面板"><span class="fold-chev">❮</span><span>输入</span></button>
+          <button class="fold-tab" id="foldRight" type="button" title="收起 / 展开读数面板（纯净模式）" aria-label="收起或展开读数面板"><span class="fold-chev">❯</span><span>读数</span></button>
         </div>
         <!-- 右栏：读数 -->
         <aside class="panel panel-right" id="panel-right">
@@ -1319,6 +1357,11 @@ body.doodling #doodleBar{display:flex}
     </div>
   </div>
 </div>
+
+<!-- 返回主页（全站统一按钮） -->
+<a class="wb-home" href="https://startian.top/" title="返回星恬的小站主页">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg><span>主页</span>
+</a>
 
 <div id="toast-wrap" aria-live="polite"></div>
 
@@ -7694,18 +7737,71 @@ function bind() {
       toast(v ? '已切换到固定视图：拖拽仅调整允许方向，旋转已锁定' : '已回到自由视角', 'info');
     });
   }
-  /* ===== P6：纯净模式 ===== */
+  /* ===== P6：纯净模式（含两侧面板折叠，画布铺满全屏）===== */
   var btnPure = $('btn-pure');
+  var foldL = $('foldLeft'), foldR = $('foldRight');
+  function syncFoldUI() {
+    var l = document.body.classList.contains('fold-l');
+    var r = document.body.classList.contains('fold-r');
+    if (foldL) {
+      foldL.innerHTML = '<span class="fold-chev">' + (l ? '❯' : '❮') + '</span><span>输入</span>';
+      foldL.title = (l ? '展开' : '收起') + '输入面板（纯净模式）';
+    }
+    if (foldR) {
+      foldR.innerHTML = '<span class="fold-chev">' + (r ? '❮' : '❯') + '</span><span>读数</span>';
+      foldR.title = (r ? '展开' : '收起') + '读数面板（纯净模式）';
+    }
+  }
+  function toggleFold(cls) {
+    document.body.classList.toggle(cls);
+    syncFoldUI();
+    G.requestRender();
+  }
+  if (foldL) foldL.addEventListener('click', function () { toggleFold('fold-l'); });
+  if (foldR) foldR.addEventListener('click', function () { toggleFold('fold-r'); });
+  syncFoldUI();
+  /* 纯净模式：工作台高度精确贴合视口（工具栏换行高度不定 → 动态计算） */
+  function fitPureHeight() {
+    var sb = $('studio-body');
+    if (!sb) return;
+    if (!document.body.classList.contains('pure')) { sb.style.height = ''; return; }
+    var shell = document.querySelector('.studio-shell');
+    if (!shell) return;
+    var bar = shell.querySelector('.studio-bar');
+    var top = shell.getBoundingClientRect().top;
+    var barH = bar ? bar.getBoundingClientRect().height : 56;
+    sb.style.height = Math.max(380, Math.round(window.innerHeight - top - barH - 12)) + 'px';
+  }
+  window.addEventListener('resize', function () {
+    if (document.body.classList.contains('pure')) fitPureHeight();
+  });
   if (btnPure) {
     btnPure.addEventListener('click', function () {
       var on = !document.body.classList.contains('pure');
       document.body.classList.toggle('pure', on);
       btnPure.innerHTML = on ? '🎦 退出纯净' : '🎦 纯净';
       try {
-        if (on && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
-        else if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+        if (on && document.documentElement.requestFullscreen) {
+          var fp = document.documentElement.requestFullscreen();
+          if (fp && fp.catch) fp.catch(function () {});
+        } else if (!on && document.fullscreenElement && document.exitFullscreen) {
+          var ep = document.exitFullscreen();
+          if (ep && ep.catch) ep.catch(function () {});
+        }
       } catch (e) {}
-      toast(on ? '纯净模式：已隐藏介绍并进入全屏（Esc 可退出全屏）' : '已退出纯净模式', 'info');
+      /* 进入纯净 → 对准工作台 + 收起两侧面板（画布铺满）；退出 → 恢复 */
+      if (on) {
+        document.body.classList.add('fold-l', 'fold-r');
+        var stEl = $('studio');
+        if (stEl) stEl.scrollIntoView({ behavior: 'instant', block: 'start' });
+        setTimeout(fitPureHeight, 60);
+      } else {
+        document.body.classList.remove('fold-l', 'fold-r');
+        fitPureHeight();
+      }
+      syncFoldUI();
+      G.requestRender();
+      toast(on ? '纯净模式：画布已铺满（点边缘「输入 / 读数」把手可展开面板，Esc 退出全屏）' : '已退出纯净模式，两侧面板已恢复', 'info');
     });
   }
   /* ===== P6：预设导出 / 导入 ===== */
