@@ -1434,7 +1434,8 @@ body.pure .fold-tab{display:flex}
         <tr><td>符号输入</td><td>输入框下方有符号条：√ ² | | ! [ ] ≤ ≥ ° 等一键插入，手机上也顺手</td></tr>
         <tr><td>命名的点</td><td>直接写 <span class="mono">P(1, 2)</span> 即可命名为 P；对象列表里点铅笔图标（或双击名字）可随时改名，关联图形名自动跟随（△ABC 改 A 为 P → △PBC）</td></tr>
         <tr><td>撤销 / 重做</td><td>Ctrl+Z 撤销、Ctrl+Shift+Z（或 Ctrl+Y）重做，也可以点工具栏按钮；添加、删除、清空、拖动、改参数都能撤</td></tr>
-        <tr><td>自动保存</td><td>场景自动保存在本机浏览器里，关掉页面再打开会自动恢复；数据不上传任何地方</td></tr>
+        <tr><td>自动保存</td><td>场景自动保存在本机浏览器里，关掉页面再打开会自动恢复（含涂鸦批注与解析卡）；数据不上传任何地方</td></tr>
+        <tr><td>预设导出 / 导入</td><td>「导出预设」存成 JSON 文件，<b>可自定义文件名</b>（如 二面角-正方体-日期），<b>涂鸦批注与解析卡一并保存</b>；「导入预设」会替换当前场景（有确认提醒，建议先导出备份当前内容）</td></tr>
         <tr><td>选择与多选</td><td><b>依次点选对象即可多选</b>（最多 99 个，无需按任何键），再点一次取消、点空白处清空；连选两个平面求二面角、选中两点连线、三点定平面（立体模式）</td></tr>
         <tr><td>导数与圆锥曲线</td><td>选中函数曲线可<b>求导 f′(x)</b>（可一键把导函数画到画布）、分析<b>极值与单调性</b>（可标注极值点）、作<b>切线</b>（指定 x 或选中曲线上的点）；隐式方程可做<b>圆锥曲线分析</b>，自动识别椭圆 / 双曲线 / 抛物线并给出中心、半轴、焦点、离心率、准线、渐近线等；直线与曲线选中后可求<b>弦长</b></td></tr>
       </table>
@@ -6970,6 +6971,7 @@ function clearResult() {
   $('block-result').style.display = 'none';
   $('result-body').innerHTML = '';
   G._diagram3 = null;
+  G._lastResult = null;   /* 关掉卡片 → 不再随预设/自动保存带走 */
 }
 G.clearResult = clearResult;
 G.showResult = showResult;
@@ -6989,6 +6991,7 @@ function showResult(res, extraUI) {
   $('result-body').innerHTML = html;
   $('block-result').style.display = '';
   if (res.diagram) G._diagram3 = res.diagram;
+  G._lastResult = res;   /* 记住结果 → 随预设导出 / 自动保存恢复 */
   G.requestRender();
 }
 function resultText(res) {
@@ -7827,6 +7830,13 @@ function serializeScene() {
       out.objs.push(rec);
     }
   });
+  /* 涂鸦批注（板书）一并随预设保存 */
+  var dw = window.__doodle;
+  if (dw && dw.strokes && dw.strokes.length) {
+    out.doodle = dw.strokes.map(function (s) { return { c: s.c, w: s.w, er: !!s.er, pts: s.pts || [] }; });
+  }
+  /* 解析卡（解析与答案）随预设保存 */
+  if (G._lastResult) out.result = G._lastResult;
   return out;
 }
 function deserializeScene(data) {
@@ -7891,12 +7901,21 @@ function deserializeScene(data) {
     Object.keys(data.params).forEach(function (k) {
       var p = data.params[k];
       if (p && typeof p.value === 'number') {
-        Scene.params[k] = { value: p.value, min: p.min || -5, max: p.max || 5, step: p.step || 0.05 };
+        Scene.params[k] = { value: p.value, min: (typeof p.min === 'number' ? p.min : -10), max: (typeof p.max === 'number' ? p.max : 10), step: p.step || 0.05 };
       }
     });
   }
   Scene.counters = data.counters || {};
   if (data.colorIdx !== undefined) Scene.colorIdx = data.colorIdx;
+  /* 涂鸦批注恢复（若预设里有） */
+  if (data.doodle && data.doodle.length && window.__doodle) {
+    window.__doodle.strokes = data.doodle.map(function (s) { return { c: s.c, w: s.w, er: !!s.er, pts: s.pts || [] }; });
+    try { localStorage.setItem('geo-doodle-v1', JSON.stringify(window.__doodle.strokes)); } catch (e) {}
+    if (G._doodleRedraw) G._doodleRedraw();
+  }
+  /* 解析卡恢复（若预设里有则展示，没有则清掉旧卡避免对不上） */
+  if (data.result && G.showResult) G.showResult(data.result);
+  else if (G.clearResult) G.clearResult();
   G.syncParams();
   return true;
 }
@@ -8308,15 +8327,24 @@ function bind() {
   if (btnExp) {
     btnExp.addEventListener('click', function () {
       try {
+        var day = new Date().toISOString().slice(0, 10);
+        var defName = '几何工坊预设-' + day;
+        var input = window.prompt('给这份预设起个名字（如：二面角-正方体），保存为「名字-日期.json」：', defName);
+        if (input === null) return;   /* 取消导出 */
+        var base = String(input).trim().replace(/[\\/:*?"<>|\s]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48);
+        if (!base) base = defName;
+        if (base.indexOf(day) < 0 && defName.indexOf('-') >= 0) base = base + '-' + day;
         var data = serializeScene();
         data.exportedAt = new Date().toISOString();
         var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = '几何工坊预设-' + new Date().toISOString().slice(0, 10) + '.json';
+        a.download = base + '.json';
         a.click();
         setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
-        toast('已导出预设（' + Scene.objs.length + ' 个对象）', 'ok');
+        var dw = window.__doodle;
+        var dText = (dw && dw.strokes && dw.strokes.length) ? '，含涂鸦批注 ' + dw.strokes.length + ' 笔' : '';
+        toast('已导出「' + base + '」（' + Scene.objs.length + ' 个对象' + dText + (G._lastResult ? '，含解析卡' : '') + '）', 'ok');
       } catch (e) { toast('导出失败：' + e.message, 'warn'); }
     });
   }
@@ -8330,7 +8358,7 @@ function bind() {
       fr.onload = function () {
         try {
           var data = JSON.parse(fr.result);
-          if (!window.confirm('导入将替换当前场景（' + (data.objs ? data.objs.length : 0) + ' 个对象），继续？')) return;
+          if (!window.confirm('导入将替换当前场景（当前 ' + Scene.objs.length + ' 个对象，文件里 ' + (data.objs ? data.objs.length : 0) + ' 个对象）。\n\n建议先点「导出预设」备份当前内容。\n\n继续导入？')) return;
           if (!deserializeScene(data)) throw new Error('文件格式不正确');
           Scene.setSel([]);
           renderAll();
@@ -8345,6 +8373,7 @@ function bind() {
   /* ===== P6：涂鸦层 ===== */
   var dk = { on: false, drawing: false, erase: false, color: '#ef4444', size: 3, strokes: [] };
   window.__doodle = dk;
+  G._doodleRedraw = function () { redrawDoodle(); };   /* 供预设导入后重绘涂鸦层 */
   try { var ds = localStorage.getItem('geo-doodle-v1'); if (ds) dk.strokes = JSON.parse(ds) || []; } catch (e) {}
   var dCv = null, dBar = null;
   function ensureDoodle() {
