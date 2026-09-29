@@ -722,6 +722,7 @@ body.doodling #doodleBar{display:flex}
 #doodleBar .dd-dot{width:20px;height:20px;border-radius:50%;border:2px solid transparent;cursor:pointer;box-shadow:0 0 0 1px var(--line);padding:0}
 #doodleBar .dd-dot.sel{border-color:var(--t1)}
 #doodleBar button.btn{padding:5px 10px}
+@media (max-width:620px){ #doodleBar .dd-hint{display:none} }
 
 
 /* ============================================================
@@ -1339,6 +1340,7 @@ body.pure .fold-tab{display:flex}
         <tr><td>空间图形</td><td>立体模式的「几何体」面板顶部可<b>一键创建空间点 / 线段 / 直线 / 平面</b>，拖动顶点即可调整；也可以先建点、选中两点连线、三点定平面</td></tr>
         <tr><td>立体模式</td><td>拖拽旋转、滚轮缩放、Shift 或右键拖拽平移、双击复位视角；点选对象后拖动 = 在水平面内移动；<b>按住 Ctrl 拖动 = 竖直升降（调高度）</b>；<b>函数与曲面同样能移动</b>：先点选，再拖动平移，右侧面板还可设位置与旋转角度（∠x / ∠y / ∠z）；坐标也可在右侧直接输入</td></tr>
         <tr><td>触摸屏</td><td>单指平移或旋转，双指捏合缩放，双指拖动平移</td></tr>
+        <tr><td>涂鸦模式</td><td>开涂鸦后随手画，只作批注、不改任何几何对象；<b>滚轮 = 缩放，Alt+滚轮 = 旋转视角</b>（立体模式）；触摸屏：单指画、<b>双指捏合缩放 / 双指旋转</b>；笔迹自动存在本机</td></tr>
         <tr><td>符号输入</td><td>输入框下方有符号条：√ ² | | ! [ ] ≤ ≥ ° 等一键插入，手机上也顺手</td></tr>
         <tr><td>命名的点</td><td>直接写 <span class="mono">P(1, 2)</span> 即可命名为 P；对象列表里点铅笔图标（或双击名字）可随时改名，关联图形名自动跟随（△ABC 改 A 为 P → △PBC）</td></tr>
         <tr><td>撤销 / 重做</td><td>Ctrl+Z 撤销、Ctrl+Shift+Z（或 Ctrl+Y）重做，也可以点工具栏按钮；添加、删除、清空、拖动、改参数都能撤</td></tr>
@@ -4117,6 +4119,15 @@ G.resetView = function () {
   view.cx = 0; view.cy = 0; view.scale = 46;
   G.requestRender();
 };
+/* 围绕屏幕点的 2D 缩放（供涂鸦层滚轮转发等外部调用） */
+G.zoom2D = function (f, sx, sy) {
+  var before = s2w(sx, sy);
+  view.scale = G.clamp(view.scale * f, view.min, view.max);
+  var after = s2w(sx, sy);
+  view.cx += before.x - after.x;
+  view.cy += before.y - after.y;
+  G.requestRender();
+};
 
 /* ============================================================
    8. 渲染入口与导出
@@ -4440,9 +4451,28 @@ function buildSphere(r, nu, nv) {
   for (i = 0; i < nu; i += 3) for (j = 0; j < nv; j++) wire.push([idx(i, j), idx(i, j + 1)]);
   return { verts: verts, faces: faces, wire: wire };
 }
+/* 旋转矩阵工具（行主序 3×3）：实心几何体旋转 / 建系变换共用 */
+function applyRotM(m, p) {
+  return {
+    x: m[0] * p.x + m[1] * p.y + m[2] * p.z,
+    y: m[3] * p.x + m[4] * p.y + m[5] * p.z,
+    z: m[6] * p.x + m[7] * p.y + m[8] * p.z
+  };
+}
+function mat3mul(A, B) {
+  var C = [];
+  for (var i = 0; i < 3; i++) {
+    for (var j = 0; j < 3; j++) {
+      C[i * 3 + j] = A[i * 3] * B[j] + A[i * 3 + 1] * B[3 + j] + A[i * 3 + 2] * B[6 + j];
+    }
+  }
+  return C;
+}
+G.applyRotM = applyRotM;
+G.mat3mul = mat3mul;
 function buildSolidObj(o) {
-  /* 缓存键包含 尺寸 + 类型 + 位置：任何路径修改位置/尺寸都会自动失效，不依赖调用者手动清缓存 */
-  var key = JSON.stringify(o.dims) + '|' + o.kind + '|' + (o.cx || 0) + ',' + (o.cy || 0) + ',' + (o.cz || 0);
+  /* 缓存键包含 尺寸 + 类型 + 位置 + 旋转：任何路径修改都会自动失效，不依赖调用者手动清缓存 */
+  var key = JSON.stringify(o.dims) + '|' + o.kind + '|' + (o.cx || 0) + ',' + (o.cy || 0) + ',' + (o.cz || 0) + '|' + (o.rotM ? o.rotM.join(',') : '');
   if (o._built && o._builtKey === key) return o._built;
   var d = o.dims, b = null;
   switch (o.kind) {
@@ -4457,10 +4487,13 @@ function buildSolidObj(o) {
     case 'sphere': b = buildSphere(d.r, 24, 12); break;
     default: b = buildBox(2, 2, 2);
   }
-  /* 应用位移（cx, cy, cz 平移） */
+  /* 旋转（rotM）→ 平移（cx, cy, cz） */
   var ox = o.cx || 0, oy = o.cy || 0, oz = o.cz || 0;
-  if (ox || oy || oz) {
-    b = { verts: b.verts.map(function (p) { return { x: p.x + ox, y: p.y + oy, z: p.z + oz }; }), faces: b.faces, wire: b.wire };
+  if (o.rotM || ox || oy || oz) {
+    b = { verts: b.verts.map(function (p) {
+      var q = o.rotM ? applyRotM(o.rotM, p) : p;
+      return { x: q.x + ox, y: q.y + oy, z: q.z + oz };
+    }), faces: b.faces, wire: b.wire };
   }
   o._built = b; o._builtKey = key;
   return b;
@@ -4470,7 +4503,9 @@ G.solidKeyPts = function (o) {
   var cx = o.cx || 0, cy = o.cy || 0, cz = o.cz || 0;
   var d = o.dims || {};
   if (o.kind === 'cylinder' || o.kind === 'frustum' || o.kind === 'cone') {
-    return [{ x: cx, y: cy, z: cz }, { x: cx, y: cy, z: cz + (d.h || 1) }];
+    var tip = { x: 0, y: 0, z: (d.h || 1) };
+    if (o.rotM) tip = applyRotM(o.rotM, tip);
+    return [{ x: cx, y: cy, z: cz }, { x: cx + tip.x, y: cy + tip.y, z: cz + tip.z }];
   }
   if (o.kind === 'sphere') {
     return [{ x: cx, y: cy, z: cz }];
@@ -5367,6 +5402,17 @@ G.resetCam3 = function () {
   cam.yaw = -0.95; cam.pitch = 0.42; cam.dist = 16; cam.tx = 0; cam.ty = 0; cam.tz = 1;
   G.requestRender();
 };
+/* 绕竖直轴旋转视角（供涂鸦层 Alt+滚轮转发等外部调用） */
+G.spinCam = function (dyaw, dpitch) {
+  cam.yaw += dyaw;
+  if (dpitch) cam.pitch = G.clamp(cam.pitch + dpitch, -1.45, 1.45);
+  G.requestRender();
+};
+/* 按比例缩放视距（f>1 放大；供涂鸦层双指手势等外部调用） */
+G.zoom3D = function (f) {
+  cam.dist = G.clamp(cam.dist / Math.max(0.05, f), 2.5, 130);
+  G.requestRender();
+};
 
 /* ============================================================
    7. 拾取与交互
@@ -5478,6 +5524,57 @@ function pointInPoly2(x, y, poly) {
   return inside;
 }
 
+/* ===== 3D 拖动吸附（拖点 / 拖几何体 → 吸到其他点；屏幕距离 12px，与 2D 手感一致）===== */
+var _snap3At = 0;
+function snapHint3(name) {
+  if (Date.now() - _snap3At < 900) return;
+  _snap3At = Date.now();
+  G.flash('📌 吸附到 ' + name);
+}
+function snapPoint3(pt) {
+  updateView();
+  var q = proj(pt); if (!q) return null;
+  var best = null, bd = 12;
+  Scene.objs.forEach(function (o) {
+    if (o.type !== 'point' || !o.visible || o.mode !== 'solid' || o.id === pt.id) return;
+    var q2 = proj(o); if (!q2) return;
+    var d = Math.hypot(q.x - q2.x, q.y - q2.y);
+    if (d < bd) { bd = d; best = o; }
+  });
+  return best;
+}
+function snapSolid3(sol, preferPt) {
+  updateView();
+  /* 1) 有手柄（用户按住的标点）时：只做手柄对齐（拖哪个角就吸哪个角，避免其它顶点中途抢吸） */
+  if (preferPt) {
+    var q0 = proj(preferPt);
+    if (!q0) return null;
+    var b1 = null, bd1 = 12;
+    Scene.objs.forEach(function (o) {
+      if (o.type !== 'point' || !o.visible || o.mode !== 'solid') return;
+      if (o._solid === sol.id || o.id === preferPt.id) return;
+      var q2 = proj(o); if (!q2) return;
+      var d = Math.hypot(q0.x - q2.x, q0.y - q2.y);
+      if (d < bd1) { bd1 = d; b1 = { ref: { x: preferPt.x, y: preferPt.y, z: preferPt.z || 0 }, cand: o }; }
+    });
+    return b1;
+  }
+  /* 2) 无手柄（直接拖面）时：几何体任意顶点中最近的一对 */
+  var refs = G.solidKeyPts(sol);
+  var best = null, bd = 12;
+  refs.forEach(function (rp) {
+    var q = proj(rp); if (!q) return;
+    Scene.objs.forEach(function (o) {
+      if (o.type !== 'point' || !o.visible || o.mode !== 'solid') return;
+      if (o._solid === sol.id) return;   /* 自己的标点不算目标 */
+      var q2 = proj(o); if (!q2) return;
+      var d = Math.hypot(q.x - q2.x, q.y - q2.y);
+      if (d < bd) { bd = d; best = { ref: rp, cand: o }; }
+    });
+  });
+  return best;
+}
+
 /* 3D 指针交互（由 js2 事件分流调用） */
 var ptr3 = new Map(), st3 = null;
 
@@ -5500,11 +5597,13 @@ G.pointer3D = function (type, e, p) {
       if (G.READONLY) hit = null;   /* 只读模式：不允许拖动点/几何体/函数 */
       st3.hit = hit;
       if (hit && hit.type === 'point' && hit._solid) {
-        /* 几何体标点：拖动它 = 拖动整个几何体（标点随体联动，不能单独移动） */
+        /* 几何体标点：拖动它 = 拖动整个几何体（标点随体联动）；
+           但「点击（不拖动）」时选中标点本身，可继续点选做连线 / 定平面 / 建系 */
         var _so = Scene.byId(hit._solid);
         if (_so) {
           st3.kind = 'dragsolid';
           st3.solid = _so;
+          st3.hitPt = hit;
           st3.sx0 = _so.cx || 0; st3.sy0 = _so.cy || 0;
           st3.startZ = _so.cz || 0;
           st3.vertical = !!(e.ctrlKey || e.metaKey);
@@ -5584,6 +5683,12 @@ G.pointer3D = function (type, e, p) {
         if (G.VIEWLOCK === 'x') st3.pt.x = st3.startWorld.x;
         if (G.VIEWLOCK === 'z') st3.pt.z = st3.startWorld.z;
       }
+      /* 3D 吸附：拖点靠近其他点时精确吸上（每帧判定，鼠标移开自动脱离） */
+      var _sp3 = snapPoint3(st3.pt);
+      if (_sp3) {
+        st3.pt.x = _sp3.x; st3.pt.y = _sp3.y; st3.pt.z = _sp3.z || 0;
+        snapHint3(_sp3.name);
+      }
       if (st3.pt._expr) {
         st3.pt._expr = null;
         if (!G._unbindNotice) {
@@ -5610,6 +5715,18 @@ G.pointer3D = function (type, e, p) {
         if (G.VIEWLOCK === 'y') st3.solid.cy = st3.sy0;
         if (G.VIEWLOCK === 'x') st3.solid.cx = st3.sx0;
         if (G.VIEWLOCK === 'z') st3.solid.cz = st3.startZ;
+      }
+      /* 3D 吸附：拖几何体靠近其他点时，最近的顶点精确对齐；
+         吸附偏移同步吸收进拖动基准（sx0/base），拖开后不回退、不残留 */
+      var _ss3 = snapSolid3(st3.solid, st3.hitPt);
+      if (_ss3) {
+        var _mvx = _ss3.cand.x - _ss3.ref.x, _mvy = _ss3.cand.y - _ss3.ref.y, _mvz = (_ss3.cand.z || 0) - (_ss3.ref.z || 0);
+        st3.solid.cx = Math.round(((st3.solid.cx || 0) + _mvx) * 1e4) / 1e4;
+        st3.solid.cy = Math.round(((st3.solid.cy || 0) + _mvy) * 1e4) / 1e4;
+        st3.solid.cz = Math.round(((st3.solid.cz || 0) + _mvz) * 1e4) / 1e4;
+        st3.sx0 += _mvx; st3.sy0 += _mvy; st3.startZ += _mvz;
+        st3.base = screenToZPlane(p.x, p.y, st3.startZ);
+        snapHint3(_ss3.cand.name);
       }
       st3.solid._built = null;
       G.flash('位置  (' + G.fmt(st3.solid.cx || 0) + ', ' + G.fmt(st3.solid.cy || 0) + ', ' + G.fmt(st3.solid.cz || 0) + ')');
@@ -5665,7 +5782,8 @@ G.pointer3D = function (type, e, p) {
       if (!st3.moved) Scene.toggleSel(st3.pt.id, e.shiftKey);
       else wasDrag3 = true;
     } else if (st3 && st3.kind === 'dragsolid') {
-      if (!st3.moved) Scene.toggleSel(st3.solid.id, e.shiftKey);
+      /* 点在标点上（未拖动）→ 选中标点本身（可多选连线 / 定平面 / 建系）；拖动 → 移动几何体 */
+      if (!st3.moved) Scene.toggleSel(st3.hitPt ? st3.hitPt.id : st3.solid.id, e.shiftKey);
       else wasDrag3 = true;
     } else if (st3 && st3.kind === 'dragfunc') {
       if (!st3.moved) Scene.toggleSel(st3.fo.id, e.shiftKey);
@@ -5682,8 +5800,9 @@ G.wheel3D = function (e) {
 };
 
 G.draw3D = draw3D;
-/* 诊断钩子：供自动化测试读取 3D 折线（与 G._lastDragKind 同类） */
+/* 诊断钩子：供自动化测试读取 3D 折线 / 投影（与 G._lastDragKind 同类） */
 G._lines3 = lines2DIn3D;
+G._proj = proj;
 console.log('[GeoStudio] 立体几何引擎已就绪');
 })();
 /* ============================================================
@@ -6035,7 +6154,14 @@ function renderObjList() {
   var list = $('obj-list');
   if (!list) return;
   var modeObjs = Scene.objs.filter(function (o) { return (o.mode || 'plane') === Scene.mode; });
-  var roots = modeObjs.filter(function (o) { return !o._solid; });   /* 标点只作为子项出现 */
+  /* 被引用的点（图形顶点 / 圆心 / 几何体标点）只作为子项出现，不再单独占根行 */
+  var refd = {};
+  modeObjs.forEach(function (o) {
+    (o.pids || []).forEach(function (id) { refd[id] = 1; });
+    if (o.cid) refd[o.cid] = 1;
+    (o._ptIds || []).forEach(function (id) { refd[id] = 1; });
+  });
+  var roots = modeObjs.filter(function (o) { return !o._solid && (o.type !== 'point' || !refd[o.id]); });
   var cnt = $('obj-count');
   if (cnt) cnt.textContent = modeObjs.length;
   if (!roots.length) {
@@ -6329,7 +6455,13 @@ function applyExprEdit(str) {
 }
 function objReadout(o, solid) {
   var h = '';
-  if (o.type === 'point') {
+  if (o.type === 'point' && o._solid) {
+    /* 几何体标点：坐标随几何体联动，不给编辑入口（编辑会被同步覆盖） */
+    var _host = Scene.byId(o._solid);
+    h += kv('坐标', esc(G.fmtPt(o, solid)), 'brand');
+    h += kv('所属', _host ? esc(_host.name) + ' 的顶点' : '几何体顶点', '');
+    h += kv('提示', '点击选中可继续多点连线 / 定平面 / 建系；拖动会移动整个几何体', '');
+  } else if (o.type === 'point') {
     h += coordEditor(o, solid ? ['x', 'y', 'z'] : ['x', 'y']);
     h += kv('到原点距离', esc(G.fmt(Math.hypot(o.x, o.y, o.z || 0))));
     if (o._expr) h += kv('联动', '随参数自动联动（手动改坐标会解除绑定）');
@@ -6920,10 +7052,11 @@ function runAction(act) {
     };
     showResult(res);
   } else if (act === 'frame') {
+    /* 建系 = 变换图形本身：把选定原点移到世界原点、把设定 x 轴旋转对齐到世界 x 轴 */
     var FO = sel[0];
-    var hx = window.prompt('x 轴方向（输入两点名，如 AB 表示 A→B；留空则自动补齐）：', '');
+    var hx = window.prompt('x 轴方向（输入两点名，如 AB 表示 A→B）：', '');
     if (hx === null) return;
-    var hy = window.prompt('y 轴方向（输入两点名，如 AC；与 x 轴至少填一个）：', '');
+    var hy = (FO.mode === 'solid') ? window.prompt('y 轴方向（输入两点名，如 AC；留空按右手系自动补齐）：', '') : '';
     if (hy === null) return;
     hx = (hx || '').trim().toUpperCase();
     hy = (hy || '').trim().toUpperCase();
@@ -6945,37 +7078,101 @@ function runAction(act) {
     if (pr1) hxV = { x: pr1.b.x - pr1.a.x, y: pr1.b.y - pr1.a.y, z: (pr1.b.z || 0) - (pr1.a.z || 0) };
     if (pr2) hyV = { x: pr2.b.x - pr2.a.x, y: pr2.b.y - pr2.a.y, z: (pr2.b.z || 0) - (pr2.a.z || 0) };
     if (!hxV && !hyV) { toast('至少需要一个有效方向（两个点名，如 AB）', 'warn'); return; }
-    if (!hxV) { hxV = { x: -hyV.y, y: hyV.x, z: 0 }; }
-    if (!hyV) { hyV = { x: -hxV.y, y: hxV.x, z: 0 }; }
     var nl = function (v) { var L = Math.hypot(v.x, v.y, v.z || 0) || 1; return { x: v.x / L, y: v.y / L, z: (v.z || 0) / L }; };
-    var ex1 = nl(hxV), ey1 = nl(hyV);
-    var L0 = 2.2;
-    var px1 = G.mkp(null, FO.x + ex1.x * L0, FO.y + ex1.y * L0, (FO.z || 0) + ex1.z * L0);
-    var py1 = G.mkp(null, FO.x + ey1.x * L0, FO.y + ey1.y * L0, (FO.z || 0) + ey1.z * L0);
-    var ax1 = G.mkseg(FO, px1, 'x′轴');
-    var ax2 = G.mkseg(FO, py1, 'y′轴');
-    var madeIds = [ax1.id, ax2.id];
-    if (Scene.mode === 'solid') {
-      var ez = { x: ex1.y * ey1.z - ex1.z * ey1.y, y: ex1.z * ey1.x - ex1.x * ey1.z, z: ex1.x * ey1.y - ex1.y * ey1.x };
-      ez = nl(ez);
-      var pz1 = G.mkp(null, FO.x + ez.x * L0, FO.y + ez.y * L0, (FO.z || 0) + ez.z * L0);
-      madeIds.push(G.mkseg(FO, pz1, 'z′轴').id);
+    if (!hxV) hxV = { x: -hyV.y, y: hyV.x, z: 0 };
+    if (!hyV) hyV = { x: -hxV.y, y: hxV.x, z: 0 };
+    var ex4 = nl(hxV);
+    var r4do = function (v) { return Math.round(v * 1e4) / 1e4; };
+    var touchedN = 0, skippedN = 0;
+    if (FO.mode === 'solid') {
+      /* 立体：正交化 y 方向 + 右手系 z，把 (ex,ey,ez) 作为新基做旋转 */
+      var eyRaw = nl(hyV);
+      var dotp = eyRaw.x * ex4.x + eyRaw.y * ex4.y + eyRaw.z * ex4.z;
+      var eyv = nl({ x: eyRaw.x - ex4.x * dotp, y: eyRaw.y - ex4.y * dotp, z: eyRaw.z - ex4.z * dotp });
+      var ezv = { x: ex4.y * eyv.z - ex4.z * eyv.y, y: ex4.z * eyv.x - ex4.x * eyv.z, z: ex4.x * eyv.y - ex4.y * eyv.x };
+      if (Math.hypot(ezv.x, ezv.y, ezv.z) < 1e-9) { toast('x 与 y 方向不能共线，换一组点再试', 'warn'); return; }
+      ezv = nl(ezv);
+      var RM = [ex4.x, ex4.y, ex4.z, eyv.x, eyv.y, eyv.z, ezv.x, ezv.y, ezv.z];
+      var O3 = { x: FO.x, y: FO.y, z: FO.z || 0 };
+      var rotF = function (v) { return { x: RM[0] * v.x + RM[1] * v.y + RM[2] * v.z, y: RM[3] * v.x + RM[4] * v.y + RM[5] * v.z, z: RM[6] * v.x + RM[7] * v.y + RM[8] * v.z }; };
+      Scene.objs.forEach(function (o) {
+        if ((o.mode || 'plane') !== 'solid') return;
+        if (o.type === 'point') {
+          var q = rotF({ x: o.x - O3.x, y: o.y - O3.y, z: (o.z || 0) - O3.z });
+          o.x = r4do(q.x); o.y = r4do(q.y); o.z = r4do(q.z);
+          if (o._expr) o._expr = null;
+          touchedN++;
+        } else if (o.type === 'vector') {
+          var vo = rotF({ x: o.ox - O3.x, y: o.oy - O3.y, z: (o.oz || 0) - O3.z });
+          var vd = rotF({ x: o.dx, y: o.dy, z: o.dz || 0 });
+          o.ox = r4do(vo.x); o.oy = r4do(vo.y); o.oz = r4do(vo.z);
+          o.dx = r4do(vd.x); o.dy = r4do(vd.y); o.dz = r4do(vd.z);
+          touchedN++;
+        } else if (o.type === 'solid') {
+          var vc = rotF({ x: (o.cx || 0) - O3.x, y: (o.cy || 0) - O3.y, z: (o.cz || 0) - O3.z });
+          o.cx = r4do(vc.x); o.cy = r4do(vc.y); o.cz = r4do(vc.z);
+          o.rotM = G.mat3mul ? G.mat3mul(RM, o.rotM || [1, 0, 0, 0, 1, 0, 0, 0, 1]) : RM;
+          o._built = null;
+          touchedN++;
+        } else if (o.type === 'func' || o.type === 'surface') {
+          skippedN++;
+        }
+      });
+    } else {
+      /* 平面：2D 旋转 -θ（θ = x 轴方向的幅角） */
+      var c0 = ex4.x, s0 = ex4.y;
+      var O2 = { x: FO.x, y: FO.y };
+      Scene.objs.forEach(function (o) {
+        if ((o.mode || 'plane') !== 'plane') return;
+        if (o.type === 'point') {
+          var vx = o.x - O2.x, vy = o.y - O2.y;
+          o.x = r4do(vx * c0 + vy * s0);
+          o.y = r4do(-vx * s0 + vy * c0);
+          if (o._expr) o._expr = null;
+          touchedN++;
+        } else if (o.type === 'vector') {
+          var vo2x = o.ox - O2.x, vo2y = o.oy - O2.y;
+          o.ox = r4do(vo2x * c0 + vo2y * s0);
+          o.oy = r4do(-vo2x * s0 + vo2y * c0);
+          var vd2x = o.dx, vd2y = o.dy;
+          o.dx = r4do(vd2x * c0 + vd2y * s0);
+          o.dy = r4do(-vd2x * s0 + vd2y * c0);
+          touchedN++;
+        } else if (o.type === 'func' || o.type === 'surface') {
+          skippedN++;
+        }
+      });
     }
-    G.frame = { o: FO.id, ex: ex1, ey: ey1 };
-    toast('已以 ' + FO.name + ' 为原点建系，坐标轴（x′/y′' + (Scene.mode === 'solid' ? '/z′' : '') + '）已画出', 'ok');
-    Scene.setSel(madeIds);
+    if (!touchedN) { toast('当前场景没有可变换的对象', 'warn'); return; }
+    G.emit('objects'); G.emit('selection'); G.requestRender();
+    G.emit('changed');
+    toast('已建系：' + FO.name + ' 移到原点、x 轴对齐世界 x 轴' + (skippedN ? '（函数 / 曲面不参与变换）' : '') + '，共变换 ' + touchedN + ' 个对象', 'ok');
+    Scene.setSel([FO.id]);
+    renderSel();
   } else if (act === 'combine3d') {
     var faces = sel.filter(function (o) { return o.type === 'poly'; });
     if (faces.length < 4) { toast('至少需要 4 个面才能组合', 'warn'); return; }
     var edgeCnt = {};
     var allPts = [];
+    /* 顶点按坐标聚簇（容差 1e-3）：不同 id、坐标重合的点视为同一顶点，
+       这样用各自独立顶点拼出的共边面也能正确识别公共边 */
+    var clusters = [];
+    function cidOf(p) {
+      for (var ci = 0; ci < clusters.length; ci++) {
+        if (Math.abs(clusters[ci].x - p.x) < 1e-3 && Math.abs(clusters[ci].y - p.y) < 1e-3 && Math.abs(clusters[ci].z - (p.z || 0)) < 1e-3) return ci;
+      }
+      clusters.push({ x: p.x, y: p.y, z: p.z || 0 });
+      return clusters.length - 1;
+    }
     faces.forEach(function (fc) {
       var qs = (fc.pids || []).map(function (id) { return Scene.byId(id); });
       if (qs.indexOf(null) >= 0 || qs.length < 3) return;
       allPts = allPts.concat(qs);
       for (var i = 0; i < qs.length; i++) {
         var a = qs[i], b = qs[(i + 1) % qs.length];
-        var k = Math.min(a.id, b.id) + '_' + Math.max(a.id, b.id);
+        var ca = cidOf(a), cb = cidOf(b);
+        if (ca === cb) continue;   /* 重合退化边跳过 */
+        var k = Math.min(ca, cb) + '_' + Math.max(ca, cb);
         edgeCnt[k] = (edgeCnt[k] || 0) + 1;
       }
     });
@@ -7342,6 +7539,7 @@ function serializeScene() {
       rec = { t: 'sector', name: o.name, cid: o.cid, r: o.r, a0: o.a0, a1: o.a1, fill: o.fill, mode: o.mode };
     } else if (o.type === 'solid') {
       rec = { t: 'solid', name: o.name, kind: o.kind, dims: o.dims, cx: o.cx || 0, cy: o.cy || 0, cz: o.cz || 0, mode: o.mode };
+      if (o.rotM) rec.rotM = o.rotM.slice();
     }
     if (rec) {
       rec.id = o.id;
@@ -7389,6 +7587,7 @@ function deserializeScene(data) {
         o = { type: 'sector', mode: rec.mode, name: rec.name, cid: idMap[rec.cid], r: rec.r, a0: rec.a0, a1: rec.a1, fill: rec.fill };
       } else if (rec.t === 'solid') {
         o = { type: 'solid', mode: rec.mode, name: rec.name, kind: rec.kind, dims: rec.dims, cx: rec.cx || 0, cy: rec.cy || 0, cz: rec.cz || 0 };
+        if (rec.rotM && rec.rotM.length === 9) o.rotM = rec.rotM.map(Number);
       }
       if (!o) return;
       /* 引用完整性检查（坏数据直接跳过） */
@@ -7865,7 +8064,7 @@ function bind() {
     stage.appendChild(dCv);
     dBar = document.createElement('div');
     dBar.id = 'doodleBar';
-    dBar.innerHTML = '<span style="font-size:12px;color:var(--t3)">画笔</span>' +
+    dBar.innerHTML = '<span class="dd-hint" style="font-size:11px;color:var(--t3);white-space:nowrap">滚轮缩放 · Alt+滚轮旋转</span>' +
       ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#111827'].map(function (c) {
         return '<button class="dd-dot' + (c === dk.color ? ' sel' : '') + '" data-dc="' + c + '" style="background:' + c + '"></button>';
       }).join('') +
@@ -7909,28 +8108,122 @@ function bind() {
         toast('涂鸦已清空（仅清涂鸦层）', 'info');
       }
     });
+    var doodlePtrs = new Map(), doodlePinch = null;
     dCv.addEventListener('pointerdown', function (e) {
+      doodlePtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (doodlePtrs.size === 2) {
+        /* 第二指落下 → 取消刚开始的笔画，进入双指手势（缩放 + 旋转） */
+        if (dk.drawing) {
+          dk.drawing = false;
+          if (dk._raf) { cancelAnimationFrame(dk._raf); dk._raf = 0; }
+          dk.strokes.pop();
+          redrawDoodle();
+        }
+        var tw = Array.from(doodlePtrs.values());
+        doodlePinch = { d0: Math.hypot(tw[0].x - tw[1].x, tw[0].y - tw[1].y) || 1, a0: Math.atan2(tw[1].y - tw[0].y, tw[1].x - tw[0].x) };
+        return;
+      }
+      if (doodlePinch) return;
       dk.drawing = true;
+      dk._rect = null; /* 每次落笔重取（防布局变化后失真） */
       try { dCv.setPointerCapture(e.pointerId); } catch (er) {}
-      var r = dCv.getBoundingClientRect();
-      dk.strokes.push({ c: dk.color, w: dk.erase ? 18 : 3, er: dk.erase, pts: [{ x: e.clientX - r.left, y: e.clientY - r.top }] });
-      redrawDoodle();
+      var r = dk._rect = dCv.getBoundingClientRect();
+      var s = { c: dk.color, w: dk.erase ? 18 : 3, er: dk.erase, pts: [{ x: e.clientX - r.left, y: e.clientY - r.top }], _drawn: 0 };
+      dk.strokes.push(s);
+      tailDraw(s); /* 只画新笔起点（不再全量重绘历史笔迹） */
     });
     dCv.addEventListener('pointermove', function (e) {
+      if (doodlePtrs.has(e.pointerId)) doodlePtrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (doodlePinch && doodlePtrs.size >= 2) {
+        /* 双指手势：距离 → 缩放；角度 → 旋转（立体模式）；映射到电脑 = 滚轮 / Alt+滚轮 */
+        var tw2 = Array.from(doodlePtrs.values());
+        var d = Math.hypot(tw2[0].x - tw2[1].x, tw2[0].y - tw2[1].y) || 1;
+        var a = Math.atan2(tw2[1].y - tw2[0].y, tw2[1].x - tw2[0].x);
+        var f = d / Math.max(20, doodlePinch.d0);
+        if (Scene.mode === 'solid') {
+          if (G.spinCam) G.spinCam(a - doodlePinch.a0, 0);
+          if (G.zoom3D) G.zoom3D(f);
+        } else if (G.zoom2D) {
+          var rq = dCv.getBoundingClientRect();
+          G.zoom2D(f, (tw2[0].x + tw2[1].x) / 2 - rq.left, (tw2[0].y + tw2[1].y) / 2 - rq.top);
+        }
+        doodlePinch.d0 = d; doodlePinch.a0 = a;
+        return;
+      }
       if (!dk.drawing) return;
-      var r = dCv.getBoundingClientRect();
       var s = dk.strokes[dk.strokes.length - 1];
+      if (!s) return;
+      var r = dk._rect || (dk._rect = dCv.getBoundingClientRect());
       s.pts.push({ x: e.clientX - r.left, y: e.clientY - r.top });
-      redrawDoodle();
+      /* 高频 move 合并为每帧一次增量绘制（原实现每次 move 全量重绘 → 不跟手） */
+      if (!dk._raf) {
+        dk._raf = requestAnimationFrame(function () {
+          dk._raf = 0;
+          tailDraw(dk.strokes[dk.strokes.length - 1]);
+        });
+      }
     });
-    function stopD() {
+    function stopD(e) {
+      if (e && e.pointerId !== undefined) {
+        doodlePtrs.delete(e.pointerId);
+        if (doodlePtrs.size < 2) doodlePinch = null;
+      }
       if (!dk.drawing) return;
       dk.drawing = false;
+      if (dk._raf) { cancelAnimationFrame(dk._raf); dk._raf = 0; }
+      tailDraw(dk.strokes[dk.strokes.length - 1]); /* 补齐最后一段 */
       try { localStorage.setItem('geo-doodle-v1', JSON.stringify(dk.strokes.slice(-200))); } catch (er) {}
     }
     dCv.addEventListener('pointerup', stopD);
     dCv.addEventListener('pointercancel', stopD);
+    /* 涂鸦模式下滚轮转发：滚轮 = 缩放；Alt+滚轮（或触摸板横向）= 旋转视角（立体模式） */
+    dCv.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      if (Scene.mode === 'solid') {
+        if (e.altKey) {
+          if (G.spinCam) G.spinCam((e.deltaY + e.deltaX) * 0.0021, 0);
+          wheelHint3('Alt+滚轮旋转视角');
+        } else {
+          if (G.wheel3D) G.wheel3D(e);
+          wheelHint3('滚轮缩放');
+        }
+      } else {
+        var r2 = dCv.getBoundingClientRect();
+        if (G.zoom2D) G.zoom2D(Math.exp(-e.deltaY * 0.0016), e.clientX - r2.left, e.clientY - r2.top);
+        wheelHint3('滚轮缩放');
+      }
+    }, { passive: false });
     window.addEventListener('resize', function () { if (dk.sizeSync) dk.sizeSync(); });
+  }
+  /* 增量绘制：只画当前笔「自上次绘制后」新增的线段（涂鸦跟手的关键优化） */
+  function tailDraw(s) {
+    if (!dCv || !s || !s.pts.length) return;
+    var from = s._drawn || 0;
+    if (s.pts.length <= from) return;
+    var g2 = dCv.getContext('2d');
+    var dpr = dCv._dpr || 1;
+    g2.save();
+    g2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g2.globalCompositeOperation = s.er ? 'destination-out' : 'source-over';
+    g2.strokeStyle = s.c; g2.lineWidth = s.w; g2.lineCap = 'round'; g2.lineJoin = 'round';
+    g2.beginPath();
+    if (from === 0) {
+      g2.moveTo(s.pts[0].x, s.pts[0].y);
+      g2.lineTo(s.pts[0].x + 0.1, s.pts[0].y);   /* 单点落墨 */
+      from = 1;
+    } else {
+      g2.moveTo(s.pts[from - 1].x, s.pts[from - 1].y);   /* 与已画段圆帽接合，无裂缝 */
+    }
+    for (var i = from; i < s.pts.length; i++) g2.lineTo(s.pts[i].x, s.pts[i].y);
+    g2.stroke();
+    g2.restore();
+    s._drawn = s.pts.length;
+  }
+  var _wheelHintAt = 0;
+  function wheelHint3(txt) {
+    if (Date.now() - _wheelHintAt < 2600) return;
+    _wheelHintAt = Date.now();
+    if (G.toast) G.toast('涂鸦模式：' + txt + '（画笔不受影响）', 'info');
   }
   function redrawDoodle() {
     if (!dCv) return;
@@ -7947,6 +8240,7 @@ function bind() {
       if (s.pts.length === 1) { g2.lineTo(s.pts[0].x + 0.1, s.pts[0].y); }
       g2.stroke();
       g2.restore();
+      s._drawn = s.pts.length;   /* 标记增量断点：后续 tailDraw 从这里续画 */
     });
     g2.setTransform(1, 0, 0, 1, 0, 0);
   }
@@ -7958,7 +8252,7 @@ function bind() {
       document.body.classList.toggle('doodling', dk.on);
       btnDoodle.innerHTML = dk.on ? '🖊 结束涂鸦' : '🖊 涂鸦';
       if (dk.sizeSync) dk.sizeSync();
-      toast(dk.on ? '涂鸦层已开启：随手画，绝不改动任何几何对象' : '涂鸦层已关闭（内容仍保留）', 'info');
+      toast(dk.on ? '涂鸦层已开启：随手画；滚轮缩放、Alt+滚轮旋转视角（不会画出笔迹）' : '涂鸦层已关闭（内容仍保留）', 'info');
     });
   }
   /* ===== P6：只读模式 ===== */
