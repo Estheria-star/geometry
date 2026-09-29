@@ -822,8 +822,10 @@ body.pure .fold-tab{display:flex}
 .ai-actions{display:flex;gap:8px;margin-top:9px}
 .ai-go{flex:1;position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:7px}
 .ai-go .ic{width:14px;height:14px}
-.ai-go.busy{pointer-events:none;opacity:.9}
+.ai-go.busy{opacity:.92;cursor:pointer}
 .ai-go.busy::after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 25%,rgba(255,255,255,.38) 50%,transparent 75%);animation:aiShimmer 1.05s linear infinite}
+.ai-go.canceling{background:linear-gradient(180deg,#ef6060,#d33030) !important;box-shadow:0 5px 0 #9c1f1f,0 12px 24px rgba(180,40,40,.4) !important}
+.ai-go.canceling::after{display:none}
 @keyframes aiShimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
 .ai-status{font-size:11.5px;color:var(--t3);margin-top:9px;line-height:1.65;opacity:0;transform:translateY(-4px);transition:opacity .35s ease,transform .35s ease}
 .ai-status.show{opacity:1;transform:none}
@@ -850,6 +852,16 @@ body.pure .fold-tab{display:flex}
   .ai-input-line textarea{font-size:13px}
   .ai-go{min-height:42px}
 }
+
+/* ============================================================
+   参数范围自定义（点 ⇔ 展开 min~max 编辑）
+   ============================================================ */
+.param-rng-btn{border:0;background:transparent;color:var(--t3);cursor:pointer;font-size:11px;padding:1px 6px;border-radius:5px;line-height:1.3;margin-left:5px}
+.param-rng-btn:hover{background:var(--line);color:var(--t1)}
+.param-rng-edit{display:none;align-items:center;gap:6px;margin-top:7px;font-size:11px;color:var(--t3)}
+.param-row.rng-open .param-rng-edit{display:flex}
+.param-rng-edit input{width:56px;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:11.5px;background:var(--glass-3);color:var(--t1);outline:none;font-family:inherit}
+.param-rng-edit input:focus{border-color:var(--brand)}
 
 /* ============================================================
    12. 全局补充与无障碍
@@ -1428,7 +1440,7 @@ body.pure .fold-tab{display:flex}
       </table>
       <h4>四、默认约束（明确设定）</h4>
       <table>
-        <tr><td>参数数量</td><td>8 个（a b c d f g h k）；滑块默认范围 [-5, 5]，步长 0.05，可手动输入精确值并自动扩展范围</td></tr>
+        <tr><td>参数数量</td><td>8 个（a b c d f g h k）；滑块默认范围 <b>[-10, 10]</b>（支持负数），步长 0.05；可手动输入精确值自动扩展，也可点参数行的 ⇔ 按钮<b>自定义滑块范围</b></td></tr>
         <tr><td>数值精度</td><td>默认 3 位小数，可切 2 / 4 / 6 位；内部计算使用双精度</td></tr>
         <tr><td>可绘制范围</td><td>平面视图半宽 0.2 至 500 之间自由缩放，超出会被限制</td></tr>
         <tr><td>采样密度</td><td>显式函数逐像素采样；隐式方程为自适应网格（约每 6px 一格，上限 260×260，拖动时自动降密）；极坐标 1800 点；参数方程 2400 点</td></tr>
@@ -2625,7 +2637,7 @@ G.Scene = Scene;
 G.ensureParams = function (o) {
   if (!o.params) return;
   o.params.forEach(function (name) {
-    if (!Scene.params[name]) Scene.params[name] = { value: 1, min: -5, max: 5, step: 0.05 };
+    if (!Scene.params[name]) Scene.params[name] = { value: 1, min: -10, max: 10, step: 0.05 };
   });
 };
 /* === 步幅引擎（拖拽 / 缩放 / 参数调节统一量化；参照 Windows 计算器「步骤」）=== */
@@ -6428,6 +6440,7 @@ G.renameObj = renameObj;
 /* ============================================================
    4. 参数滑块
    ============================================================ */
+var PARAM_RNG_OPEN = {};   /* 参数范围编辑器的展开状态 */
 function renderParams() {
   var wrap = $('param-list'), blank = $('param-blank');
   if (!wrap) return;
@@ -6440,10 +6453,17 @@ function renderParams() {
   blank.style.display = 'none';
   wrap.innerHTML = names.map(function (n) {
     var p = Scene.params[n];
-    return '<div class="param-row">' +
+    var open = !!PARAM_RNG_OPEN[n];
+    return '<div class="param-row' + (open ? ' rng-open' : '') + '">' +
       '<div class="param-head"><span class="param-name">' + n + '</span>' +
+      '<button type="button" class="param-rng-btn" data-rng="' + n + '" title="自定义滑块范围（默认 -10 ~ 10）">⇔</button>' +
       '<span class="param-val"><input type="number" step="' + (G.STEP || 'any') + '" value="' + p.value + '" data-p="' + n + '" aria-label="参数 ' + n + '"></span></div>' +
       '<input type="range" min="' + p.min + '" max="' + p.max + '" step="' + (G.STEP || p.step) + '" value="' + p.value + '" data-p="' + n + '" aria-label="参数 ' + n + ' 滑块">' +
+      '<div class="param-rng-edit"><span>范围</span>' +
+      '<input type="number" step="any" value="' + p.min + '" data-rmin="' + n + '" aria-label="最小">' +
+      '<span>~</span>' +
+      '<input type="number" step="any" value="' + p.max + '" data-rmax="' + n + '" aria-label="最大">' +
+      '<button type="button" class="btn btn-ghost btn-xs" data-rok="' + n + '">确定</button></div>' +
       '</div>';
   }).join('');
 }
@@ -6455,6 +6475,37 @@ function afterParamChange() {
 function bindParamEvents() {
   var wrap = $('param-list');
   var numTimer = null;
+  /* 范围自定义：⇔ 展开 / 确定应用 */
+  wrap.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var rb = t.closest('[data-rng]');
+    if (rb) {
+      var rn = rb.getAttribute('data-rng');
+      PARAM_RNG_OPEN[rn] = !PARAM_RNG_OPEN[rn];
+      renderParams();
+      return;
+    }
+    var okb = t.closest('[data-rok]');
+    if (okb) {
+      var n2 = okb.getAttribute('data-rok');
+      var row = okb.closest('.param-row');
+      var mi = row ? row.querySelector('[data-rmin]') : null;
+      var ma = row ? row.querySelector('[data-rmax]') : null;
+      var def = Scene.params[n2];
+      var v1 = parseFloat(mi && mi.value), v2 = parseFloat(ma && ma.value);
+      if (!def) return;
+      if (!isFinite(v1) || !isFinite(v2) || v1 >= v2) { toast('范围无效：最小值需小于最大值', 'warn'); return; }
+      def.min = v1; def.max = v2;
+      if (def.value < v1) def.value = v1;
+      if (def.value > v2) def.value = v2;
+      PARAM_RNG_OPEN[n2] = false;
+      renderParams();
+      afterParamChange();
+      G.emit('changed');
+      toast('参数 ' + n2 + ' 的滑块范围已设为 ' + v1 + ' ~ ' + v2, 'ok');
+    }
+  });
   wrap.addEventListener('input', function (e) {
     var t = e.target;
     if (!t.dataset || !t.dataset.p) return;
@@ -8884,7 +8935,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
   ].join('\n');
 
   /* -- 调 DeepSeek -- */
-  function callAI(question, deep, cb, onErr) {
+  function callAI(question, deep, cb, onErr, onCtrl) {
     var key = getKey();
     if (!key) { onErr('尚未设置 API Key：点右上角 🔑 填入 DeepSeek Key（只存本机）'); return; }
     var ctrl = null, timer = null;
@@ -8893,6 +8944,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
       ctrl = new AbortController();
       timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, budget);
     } catch (e) {}
+    if (onCtrl && ctrl) onCtrl(function () { try { ctrl.abort(); } catch (e) {} });   /* 暴露中止入口（取消建造用） */
     var body = {
       model: deep ? 'deepseek-reasoner' : 'deepseek-chat',
       messages: [{ role: 'system', content: SYS }, { role: 'user', content: question }],
@@ -8941,7 +8993,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
   var SOLID_KINDS = { cube: 1, cuboid: 1, prism: 1, pyramid: 1, tetra: 1, cylinder: 1, cone: 1, sphere: 1, frustum: 1 };
   function num(v) { var x = parseFloat(v); return isFinite(x) ? x : 0; }
 
-  function buildScene(data, onProgress, onDone) {
+  function buildScene(data, onProgress, onDone, isCancelled) {
     var mode = (data.mode === 'solid') ? 'solid' : 'plane';
     var switched = (G.Scene.mode !== mode);
     if (switched) {
@@ -9007,6 +9059,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
     }
     var gap = Math.max(70, Math.min(210, Math.round(1300 / Math.max(1, seq.length))));
     function step() {
+      if (isCancelled && isCancelled()) return;   /* 已取消：停止建造链 */
       if (i >= seq.length) { afterBuild(); return; }
       try { apply(seq[i]); } catch (e) { /* 单条坏指令跳过 */ }
       i++;
@@ -9099,6 +9152,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
       G.emit('objects'); G.emit('selection'); G.requestRender();
       G.emit('changed');   /* 记撤销点：一次撤销可回到 AI 建造之前 */
       fitView(true, function () {
+        if (isCancelled && isCancelled()) return;
         showAnalysis(data, made.length);
         if (onDone) onDone(made.length);
       });
@@ -9122,46 +9176,86 @@ console.log('[GeoStudio] 落地页交互已就绪');
 
   /* -- 主流程 -- */
   var running = false;
+  var activeRun = null;   /* 当前运行中的任务（取消用） */
   function runAI() {
-    if (running) return;
+    /* 运行中再次点击 = 取消建造 */
+    if (running) { if (activeRun) activeRun.cancel(); return; }
     var input = $('aiInput');
     var q = input ? input.value.trim() : '';
     if (!q) { status('先在上方输入一道题目吧', 'warn'); shake(); return; }
     running = true;
     var btn = $('aiGo');
+    var btnSpan = btn ? btn.querySelector('span') : null;
     var deepEl = $('aiDeep');
     var deep = !!(deepEl && deepEl.checked);
-    if (btn) { btn.classList.add('busy'); }
+    var aborted = false, abortFetch = null, backup = null, backupMode = null;
     var t0 = Date.now();
+    function setBtnBusy(busy) {
+      if (!btn) return;
+      if (busy) { btn.classList.add('busy', 'canceling'); if (btnSpan) btnSpan.textContent = '取消建造'; }
+      else { btn.classList.remove('busy', 'canceling'); if (btnSpan) btnSpan.textContent = 'AI 分析并建造'; }
+    }
+    var tick = null;
+    function finish() {
+      if (tick) { clearInterval(tick); tick = null; }
+      running = false;
+      setBtnBusy(false);
+      activeRun = null;
+    }
+    activeRun = {
+      cancel: function () {
+        if (!running || aborted) return;
+        aborted = true;
+        if (abortFetch) abortFetch();          /* 中止 API 请求 */
+        /* 若已开始建造：整场恢复（含模式），等于「这次 AI 操作没发生过」 */
+        if (backup) {
+          try {
+            if (G.deserializeScene(backup)) {
+              if (backupMode && G.ui.setMode) G.ui.setMode(backupMode);
+              G.emit('objects'); G.emit('selection'); G.requestRender();
+            }
+          } catch (e) {}
+        }
+        status(backup ? '已取消建造：场景已恢复到操作前' : '已取消分析', 'warn');
+        setTimeout(statusFade, 4500);
+        finish();
+      }
+    };
+    setBtnBusy(true);
     /* 分析阶段：实时耗时显示（深度推理可能 1-3 分钟） */
-    var tick = setInterval(function () {
+    tick = setInterval(function () {
       var sec = Math.round((Date.now() - t0) / 1000);
-      if (deep) status('深度推理中（DeepSeek-R1）…已用 ' + sec + 's，复杂题可能需要 1~3 分钟', '', true);
+      if (deep) status('深度推理中（DeepSeek-R1）…已用 ' + sec + 's，复杂题可能需要 1~3 分钟（点「取消建造」可中止）', '', true);
       else status('正在分析题目…已用 ' + sec + 's', '', true);
     }, 1000);
     status(deep ? '深度推理中（DeepSeek-R1）…' : '正在分析题目…', '', true);
     callAI(q, deep, function (data) {
-      clearInterval(tick);
+      if (aborted) return;
+      clearInterval(tick); tick = null;
+      /* 记录建造前场景（取消时回退用） */
+      try { backup = G.serializeScene(); backupMode = backup.mode || G.Scene.mode; } catch (e) { backup = null; }
       status('题目解析完成，正在建造图形…', '', true);
       /* 让「分析完成」的状态闪一下再进入建造，节奏更自然 */
       setTimeout(function () {
+        if (aborted) return;
         buildScene(data,
-          function (i, total) { status('正在建造图形…（' + i + '/' + total + '）', '', true); },
+          function (i, total) { if (!aborted) status('正在建造图形…（' + i + '/' + total + '），点「取消建造」可中止', '', true); },
           function (n) {
+            if (aborted) return;
             var sec = ((Date.now() - t0) / 1000).toFixed(1);
             status('✨ 完成！已建造 ' + n + ' 个对象（' + sec + 's），解析卡可查看完整推导与答案', 'ok');
             setTimeout(statusFade, 6000);
-            running = false;
-            if (btn) btn.classList.remove('busy');
-          });
+            finish();
+          },
+          function () { return aborted; });
       }, 320);
     }, function (err) {
-      clearInterval(tick);
+      if (aborted) return;   /* 取消引发的中止不算错误 */
+      clearInterval(tick); tick = null;
       status(esc(err), 'err');
       shake();
-      running = false;
-      if (btn) btn.classList.remove('busy');
-    });
+      finish();
+    }, function (reg) { abortFetch = reg; });
   }
 
   /* ------- 悬浮球：拖动 / 点击展开收起 / 位置记忆 / 方向自适应 ------- */
