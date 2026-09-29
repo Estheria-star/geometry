@@ -3724,6 +3724,75 @@ G.axisIntercepts = function (o, P) {
   return out.slice(0, 8);
 };
 
+/* ============================================================
+   外接圆 / 内切圆（平面）
+   外接圆：最小包围圆（Welzl）；内切圆：三角形精确（S/s）、多边形近似
+   ============================================================ */
+function c2_2(a, b) {
+  return { c: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, r: Math.hypot(a.x - b.x, a.y - b.y) / 2 };
+}
+function c2_3(a, b, c3) {
+  var d = 2 * (a.x * (b.y - c3.y) + b.x * (c3.y - a.y) + c3.x * (a.y - b.y));
+  if (Math.abs(d) < 1e-12) return null;   /* 三点共线 */
+  var ux = ((a.x * a.x + a.y * a.y) * (b.y - c3.y) + (b.x * b.x + b.y * b.y) * (c3.y - a.y) + (c3.x * c3.x + c3.y * c3.y) * (a.y - b.y)) / d;
+  var uy = ((a.x * a.x + a.y * a.y) * (c3.x - b.x) + (b.x * b.x + b.y * b.y) * (a.x - c3.x) + (c3.x * c3.x + c3.y * c3.y) * (b.x - a.x)) / d;
+  return { c: { x: ux, y: uy }, r: Math.hypot(ux - a.x, uy - a.y) };
+}
+function c2_in(s, p) { return s && Math.hypot(s.c.x - p.x, s.c.y - p.y) <= s.r + 1e-7; }
+function c2_set(R) {
+  if (R.length === 0) return null;
+  if (R.length === 1) return { c: { x: R[0].x, y: R[0].y }, r: 0 };
+  if (R.length === 2) return c2_2(R[0], R[1]);
+  return c2_3(R[0], R[1], R[2]) || c2_2(R[0], R[1]);
+}
+function c2_welzl(P, R, n) {
+  if (n === 0 || R.length === 3) return c2_set(R);
+  var p = P[n - 1];
+  var D = c2_welzl(P, R, n - 1);
+  if (D && c2_in(D, p)) return D;
+  return c2_welzl(P, R.concat([p]), n - 1);
+}
+G.circumCircle2 = function (pts) {
+  if (!pts || pts.length < 2) return null;
+  var P = pts.map(function (p) { return { x: p.x, y: p.y }; });
+  for (var i = P.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = P[i]; P[i] = P[j]; P[j] = t; }
+  var mb = c2_welzl(P, [], P.length);
+  if (!mb) return null;
+  var onN = pts.filter(function (p) { return Math.abs(Math.hypot(mb.c.x - p.x, mb.c.y - p.y) - mb.r) < 1e-4; }).length;
+  return { c: mb.c, r: mb.r, onCircle: onN, total: pts.length,
+           kindNote: (onN === pts.length) ? '所有顶点都在圆上 ✓' : '最小包围圆（部分顶点在内部）' };
+};
+G.incircleOf2 = function (pts) {
+  if (!pts || pts.length < 3) return null;
+  var P = pts.map(function (p) { return { x: p.x, y: p.y }; });
+  if (pts.length === 3) {
+    var a = Math.hypot(P[1].x - P[2].x, P[1].y - P[2].y);
+    var b = Math.hypot(P[0].x - P[2].x, P[0].y - P[2].y);
+    var c = Math.hypot(P[0].x - P[1].x, P[0].y - P[1].y);
+    var S = Math.abs((P[1].x - P[0].x) * (P[2].y - P[0].y) - (P[2].x - P[0].x) * (P[1].y - P[0].y)) / 2;
+    var sp = (a + b + c) / 2;
+    if (sp <= 0 || S < 1e-12) return null;
+    var r = S / sp;
+    var Ix = (a * P[0].x + b * P[1].x + c * P[2].x) / (a + b + c);
+    var Iy = (a * P[0].y + b * P[1].y + c * P[2].y) / (a + b + c);
+    return { c: { x: Ix, y: Iy }, r: r, kindNote: '三角形内心：r = S/s（面积 ÷ 半周长）' };
+  }
+  var ctr = { x: 0, y: 0 };
+  P.forEach(function (p) { ctr.x += p.x; ctr.y += p.y; });
+  ctr.x /= P.length; ctr.y /= P.length;
+  var rmin = Infinity, ds = [];
+  for (var i2 = 0; i2 < P.length; i2++) {
+    var A = P[i2], B = P[(i2 + 1) % P.length];
+    var dx = B.x - A.x, dy = B.y - A.y, L2 = dx * dx + dy * dy;
+    var t = L2 > 0 ? Math.max(0, Math.min(1, ((ctr.x - A.x) * dx + (ctr.y - A.y) * dy) / L2)) : 0;
+    var d = Math.hypot(ctr.x - (A.x + dx * t), ctr.y - (A.y + dy * t));
+    ds.push(d);
+    if (d < rmin) rmin = d;
+  }
+  var even = ds.every(function (x) { return Math.abs(x - rmin) < Math.max(1e-4, rmin * 1e-4); });
+  return { c: ctr, r: rmin, kindNote: even ? '与各边都相切（形心即圆心）' : '近似内切圆（形心到各边最小距离）' };
+};
+
 /* 面积（含推导步骤），返回 {title, value, steps:[...]} */
 G.areaOf = function (o, extra) {
   extra = extra || {};
@@ -5451,6 +5520,188 @@ G.surfaceAreaOf = function (o) {
   return { title: (o.name || '几何体') + ' 表面积', value: s, steps: steps };
 };
 
+/* ============================================================
+   6.2 外接球 / 内切球
+   多面体与组合体：顶点集最小包围球（Welzl）/ 形心内切；
+   旋转体：解析公式（含 rotM 变换支持）
+   ============================================================ */
+function sBallSet(R) {
+  var n = R.length;
+  if (n === 0) return null;
+  if (n === 1) return { c: { x: R[0].x, y: R[0].y, z: R[0].z || 0 }, r: 0 };
+  if (n === 2) {
+    var a = R[0], b = R[1];
+    return { c: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: ((a.z || 0) + (b.z || 0)) / 2 },
+             r: V.dist({ x: a.x, y: a.y, z: a.z || 0 }, { x: b.x, y: b.y, z: b.z || 0 }) / 2 };
+  }
+  if (n === 3) return sBall3(R[0], R[1], R[2]);
+  var s4 = sBall4(R[0], R[1], R[2], R[3]);
+  if (s4) return s4;
+  var cands = [[0, 1, 2], [0, 1, 3], [0, 2, 3], [1, 2, 3]]
+    .map(function (ix) { return sBall3(R[ix[0]], R[ix[1]], R[ix[2]]); }).filter(Boolean);
+  cands.sort(function (x, y) { return y.r - x.r; });
+  return cands[0] || null;
+}
+function sBall3(a, b, c) {
+  var A = { x: a.x, y: a.y, z: a.z || 0 }, B = { x: b.x, y: b.y, z: b.z || 0 }, C = { x: c.x, y: c.y, z: c.z || 0 };
+  var ab = V.sub(B, A), ac = V.sub(C, A);
+  var nrm = V.cross(ab, ac);
+  var nl2 = V.dot(nrm, nrm);
+  if (nl2 < 1e-14) {
+    var ps = [A, B, C], bi = 0, bj = 1, bd = -1;
+    for (var i = 0; i < 3; i++) for (var j = i + 1; j < 3; j++) {
+      var dd = V.dist(ps[i], ps[j]);
+      if (dd > bd) { bd = dd; bi = i; bj = j; }
+    }
+    return sBallSet([ps[bi], ps[bj]]);
+  }
+  var t1 = V.scale(V.cross(ac, nrm), V.dot(ab, ab));
+  var t2 = V.scale(V.cross(nrm, ab), V.dot(ac, ac));
+  var cc = V.add(A, V.scale(V.add(t1, t2), 1 / (2 * nl2)));
+  return { c: cc, r: V.dist(cc, A) };
+}
+function sBall4(a, b, c, d) {
+  var A = { x: a.x, y: a.y, z: a.z || 0 }, B = { x: b.x, y: b.y, z: b.z || 0 },
+      C = { x: c.x, y: c.y, z: c.z || 0 }, D = { x: d.x, y: d.y, z: d.z || 0 };
+  var m = [
+    [2 * (B.x - A.x), 2 * (B.y - A.y), 2 * (B.z - A.z)],
+    [2 * (C.x - A.x), 2 * (C.y - A.y), 2 * (C.z - A.z)],
+    [2 * (D.x - A.x), 2 * (D.y - A.y), 2 * (D.z - A.z)]
+  ];
+  var rhs = [
+    (B.x * B.x + B.y * B.y + B.z * B.z) - (A.x * A.x + A.y * A.y + A.z * A.z),
+    (C.x * C.x + C.y * C.y + C.z * C.z) - (A.x * A.x + A.y * A.y + A.z * A.z),
+    (D.x * D.x + D.y * D.y + D.z * D.z) - (A.x * A.x + A.y * A.y + A.z * A.z)
+  ];
+  function det3(r0, r1, r2) {
+    return r0[0] * (r1[1] * r2[2] - r1[2] * r2[1]) - r0[1] * (r1[0] * r2[2] - r1[2] * r2[0]) + r0[2] * (r1[0] * r2[1] - r1[1] * r2[0]);
+  }
+  var det = det3(m[0], m[1], m[2]);
+  if (Math.abs(det) < 1e-12) return null;   /* 四点共面 */
+  var O = {
+    x: det3([rhs[0], m[0][1], m[0][2]], [rhs[1], m[1][1], m[1][2]], [rhs[2], m[2][1], m[2][2]]) / det,
+    y: det3([m[0][0], rhs[0], m[0][2]], [m[1][0], rhs[1], m[1][2]], [m[2][0], rhs[2], m[2][2]]) / det,
+    z: det3([m[0][0], m[0][1], rhs[0]], [m[1][0], m[1][1], rhs[1]], [m[2][0], m[2][1], rhs[2]]) / det
+  };
+  return { c: O, r: V.dist(O, A) };
+}
+function ballOK(s, p) { return s && V.dist(s.c, { x: p.x, y: p.y, z: p.z || 0 }) <= s.r + 1e-7; }
+function welzl3(P, R, n) {
+  if (n === 0 || R.length === 4) return sBallSet(R);
+  var p = P[n - 1];
+  var D = welzl3(P, R, n - 1);
+  if (D && ballOK(D, p)) return D;
+  return welzl3(P, R.concat([p]), n - 1);
+}
+G.minBall3 = function (pts) {
+  if (!pts || !pts.length) return null;
+  var P = pts.map(function (p) { return { x: p.x, y: p.y, z: p.z || 0 }; });
+  for (var i = P.length - 1; i > 0; i--) {   /* 洗牌防最坏情况 */
+    var j = Math.floor(Math.random() * (i + 1)), t = P[i]; P[i] = P[j]; P[j] = t;
+  }
+  return welzl3(P, [], P.length);
+};
+/* 外接球（世界坐标；支持 rotM；多面体走顶点集，旋转体走解析公式） */
+G.circumSphereOf = function (o) {
+  if (o.type !== 'solid') return null;
+  var cx = o.cx || 0, cy = o.cy || 0, cz = o.cz || 0;
+  var world = function (local) {
+    var q = o.rotM ? applyRotM(o.rotM, local) : local;
+    return { x: cx + q.x, y: cy + q.y, z: cz + q.z };
+  };
+  var d = o.dims || {};
+  if (o.kind === 'sphere') return { c: { x: cx, y: cy, z: cz }, r: d.r, onSphere: 1, total: 1, kindNote: '球的外接球即自身' };
+  if (o.kind === 'cylinder') {
+    var h = d.h || 1;
+    return { c: world({ x: 0, y: 0, z: h / 2 }), r: Math.sqrt(d.r * d.r + h * h / 4), onSphere: 0, total: 0,
+             kindNote: '球心在轴中点：R = √(r² + (h/2)²)' };
+  }
+  if (o.kind === 'cone') {
+    var h2 = d.h || 1, rv = d.r;
+    var z0 = (h2 * h2 - rv * rv) / (2 * h2);
+    return { c: world({ x: 0, y: 0, z: z0 }), r: (h2 * h2 + rv * rv) / (2 * h2), onSphere: 0, total: 0,
+             kindNote: '球心在轴线上：R = (h² + r²) / (2h)' };
+  }
+  if (o.kind === 'frustum') {
+    var h3 = d.h || 1;
+    var z1 = (d.r2 * d.r2 - d.r1 * d.r1 + h3 * h3) / (2 * h3);
+    return { c: world({ x: 0, y: 0, z: z1 }), r: Math.sqrt(d.r1 * d.r1 + z1 * z1), onSphere: 0, total: 0,
+             kindNote: '球心在轴线上（两底圆都在球面上）' };
+  }
+  var verts = buildSolidObj(o).verts;
+  var mb = G.minBall3(verts);
+  if (!mb) return null;
+  var onN = verts.filter(function (p) { return Math.abs(V.dist(mb.c, p) - mb.r) < 1e-4; }).length;
+  return { c: mb.c, r: mb.r, onSphere: onN, total: verts.length,
+           kindNote: (onN === verts.length) ? '所有顶点都在球面上 ✓' : '最小包围球（部分顶点在内部）' };
+};
+/* 内切球 */
+G.inscribedSphereOf = function (o) {
+  if (o.type !== 'solid') return null;
+  var cx = o.cx || 0, cy = o.cy || 0, cz = o.cz || 0;
+  var world = function (local) { var q = o.rotM ? applyRotM(o.rotM, local) : local; return { x: cx + q.x, y: cy + q.y, z: cz + q.z }; };
+  var d = o.dims || {};
+  if (o.kind === 'sphere') return { c: { x: cx, y: cy, z: cz }, r: d.r, kindNote: '内切球即自身' };
+  if (o.kind === 'cylinder') {
+    var h = d.h || 1;
+    var ri = Math.min(d.r, h / 2);
+    var note = (Math.abs(h - 2 * d.r) < 1e-6) ? '与侧面、两底面都相切' : (h > 2 * d.r ? '与侧面相切（离两底面有余量）' : '与两底面相切（离侧面有余量）');
+    return { c: world({ x: 0, y: 0, z: h / 2 }), r: ri, kindNote: note };
+  }
+  if (o.kind === 'cone') {
+    var h2 = d.h || 1, l = Math.sqrt(d.r * d.r + h2 * h2);
+    var ri2 = d.r * h2 / (d.r + l);
+    return { c: world({ x: 0, y: 0, z: ri2 }), r: ri2, kindNote: '与底面、侧面都相切：r = R·h / (R + l)' };
+  }
+  if (o.kind === 'frustum') {
+    var h3 = d.h || 1, r1 = d.r1, r2v = d.r2;
+    function sideDist(z) {
+      var ax = r1, az = 0, bx = r2v, bz = h3;
+      var dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz;
+      var t = L2 > 0 ? Math.max(0, Math.min(1, ((0 - ax) * dx + (z - az) * dz) / L2)) : 0;
+      return Math.hypot(0 - (ax + dx * t), z - (az + dz * t));
+    }
+    function minDist(z) { if (z <= 0 || z >= h3) return 0; return Math.min(z, h3 - z, sideDist(z)); }
+    var bestZ = h3 / 2, bestD = -1;
+    for (var i = 0; i <= 200; i++) {
+      var zz = (i + 0.5) * h3 / 201, dd = minDist(zz);
+      if (dd > bestD) { bestD = dd; bestZ = zz; }
+    }
+    for (var it = 0; it < 40; it++) {
+      var step = h3 / 201 / Math.pow(1.6, it);
+      var zl = Math.max(0.001, bestZ - step), zr = Math.min(h3 - 0.001, bestZ + step);
+      var dl = minDist(zl), dr = minDist(zr);
+      if (dl > bestD) { bestD = dl; bestZ = zl; }
+      if (dr > bestD) { bestD = dr; bestZ = zr; }
+    }
+    return { c: world({ x: 0, y: 0, z: bestZ }), r: bestD, kindNote: '沿轴线的最大内切球（数值解）' };
+  }
+  /* 多面体 / 组合体：形心 + 最小面距 + 等距验证 */
+  var b = buildSolidObj(o);
+  var ctr = { x: 0, y: 0, z: 0 };
+  b.verts.forEach(function (p) { ctr.x += p.x; ctr.y += p.y; ctr.z += p.z; });
+  ctr.x /= b.verts.length; ctr.y /= b.verts.length; ctr.z /= b.verts.length;
+  var rmin = Infinity, dists = [];
+  b.faces.forEach(function (f) {
+    var nx = 0, ny = 0, nz = 0;
+    for (var i2 = 0; i2 < f.length; i2++) {
+      var A = b.verts[f[i2]], B = b.verts[f[(i2 + 1) % f.length]];
+      nx += (A.y - B.y) * (A.z + B.z);
+      ny += (A.z - B.z) * (A.x + B.x);
+      nz += (A.x - B.x) * (A.y + B.y);
+    }
+    var nl = Math.hypot(nx, ny, nz);
+    if (nl < 1e-12) return;
+    var p0 = b.verts[f[0]];
+    var fd = Math.abs((ctr.x - p0.x) * nx + (ctr.y - p0.y) * ny + (ctr.z - p0.z) * nz) / nl;
+    dists.push(fd);
+    if (fd < rmin) rmin = fd;
+  });
+  if (!isFinite(rmin)) return null;
+  var even = dists.every(function (x) { return Math.abs(x - rmin) < Math.max(1e-4, rmin * 1e-4); });
+  return { c: ctr, r: rmin, kindNote: even ? '与所有面相切（形心即球心）' : '近似内切球（形心到各面最小距离）' };
+};
+
 /* 四点（四面体）体积：混合积 */
 G.tetraVolumeOf4 = function (pts) {
   var v = G.tetraVolume(pts[0], pts[1], pts[2], pts[3]);
@@ -6924,7 +7175,8 @@ function renderActions() {
     if (o.type === 'func' && ['explicitY', 'explicitX', 'implicit'].indexOf(o.kind) >= 0) {
       add('圆锥曲线分析', 'conic', 'i-circle');
     }
-    if (o.type === 'solid') { add('求体积', 'volume', 'i-box'); add('求表面积', 'surfarea', 'i-ruler'); }
+    if (o.type === 'solid') { add('求体积', 'volume', 'i-box'); add('求表面积', 'surfarea', 'i-ruler'); add('外接球', 'circum3d', 'i-circle'); add('内切球', 'inscribe3d', 'i-circle'); }
+    if (o.type === 'poly' && (o.pids || []).length >= 3) { add('外接圆', 'circum2d', 'i-circle'); add('内切圆', 'incircle2d', 'i-circle'); }
     if (o.type === 'point') add('以此点建系', 'frame', 'i-plane');
     if (solid && o.type === 'point') add('删除', 'del', 'i-trash');
   } else if (sel.length >= 2) {
@@ -7209,6 +7461,26 @@ function runConicAnalyze(o) {
   var steps = [{ text: '识别结果：' + res.type, cls: 'ok' }].concat(res.steps);
   showResult({ title: '圆锥曲线分析 · ' + res.type, value: NaN, steps: steps });
 }
+/* 生成球体 / 圆的辅助（供外接球内切球动作与 AI schema 共用） */
+G.addSphereObj = function (c, r, name) {
+  var r4 = function (v) { return Math.round(v * 1e4) / 1e4; };
+  var sph = {
+    type: 'solid', mode: 'solid', kind: 'sphere',
+    name: name || G.nameOf('球 ', 'sphere'),
+    dims: { r: r4(r) }, cx: r4(c.x), cy: r4(c.y), cz: r4(c.z || 0)
+  };
+  Scene.add(sph);
+  if (G.ensureSolidPts) { try { G.ensureSolidPts(sph); } catch (e) {} }
+  return sph;
+};
+G.addCircleObj = function (c, r, name) {
+  var r4 = function (v) { return Math.round(v * 1e4) / 1e4; };
+  var cp = G.mkp(null, r4(c.x), r4(c.y), 0);
+  if (name) cp.name = name;
+  var o = { type: 'circle', mode: 'plane', name: '⊙' + cp.name, cid: cp.id, r: r4(r), fill: false };
+  Scene.add(o);
+  return o;
+};
 function runAction(act) {
   var sel = Scene.selObjs();
   var o = sel[0];
@@ -7226,6 +7498,47 @@ function runAction(act) {
     showResult(G.volumeOf(o));
   } else if (act === 'surfarea') {
     showResult(G.surfaceAreaOf(o));
+  } else if (act === 'circum3d' || act === 'inscribe3d') {
+    /* 外接球 / 内切球：生成球体 + 标注球心 + 结果卡 */
+    var so3 = sel[0];
+    var sres = (act === 'circum3d') ? G.circumSphereOf(so3) : G.inscribedSphereOf(so3);
+    if (!sres) { toast('无法计算（请选中一个几何体）', 'warn'); return; }
+    var nm3 = (act === 'circum3d' ? '外接球' : '内切球');
+    var sphN = G.addSphereObj(sres.c, sres.r, G.nameOf(nm3 + ' ', 'sphere'));
+    var cpt3 = G.mkp(null, Math.round(sres.c.x * 1e4) / 1e4, Math.round(sres.c.y * 1e4) / 1e4, Math.round((sres.c.z || 0) * 1e4) / 1e4);
+    Scene.setSel([sphN.id]);
+    G.emit('objects'); G.emit('selection'); G.requestRender();
+    G.emit('changed');
+    var st3 = [
+      { text: '半径 r = ' + G.fmt(sres.r) + (G.exact(sres.r) ? '（= ' + G.exact(sres.r) + '）' : '') },
+      { text: '球心 (' + G.fmt(sres.c.x) + ', ' + G.fmt(sres.c.y) + ', ' + G.fmt(sres.c.z) + ')（已标注为点 ' + cpt3.name + '）' }
+    ];
+    if (sres.onSphere !== undefined && sres.total) st3.push({ text: '验证：' + sres.onSphere + ' / ' + sres.total + ' 个顶点在球面上' });
+    if (sres.kindNote) st3.push({ text: sres.kindNote });
+    st3.push({ text: '已生成「' + sphN.name + '」，可整体拖动 / 改色 / 删除；点两次撤销可还原', cls: 'ok' });
+    showResult({ title: nm3 + ' · ' + (so3.name || '几何体'), value: sres.r, steps: st3 });
+    toast('已生成' + nm3 + '（r = ' + G.fmt(sres.r) + '）', 'ok');
+  } else if (act === 'circum2d' || act === 'incircle2d') {
+    /* 外接圆 / 内切圆（平面） */
+    var po2 = sel[0];
+    var pl2 = (po2.pids || []).map(function (id) { return Scene.byId(id); }).filter(Boolean);
+    if (pl2.length < 3) { toast('至少需要 3 个顶点', 'warn'); return; }
+    var cres = (act === 'circum2d') ? G.circumCircle2(pl2) : G.incircleOf2(pl2);
+    if (!cres) { toast('无法计算（顶点可能共线）', 'warn'); return; }
+    var nm2 = (act === 'circum2d' ? '外接圆' : '内切圆');
+    var cob = G.addCircleObj(cres.c, cres.r, null);
+    Scene.setSel([cob.id]);
+    G.emit('objects'); G.emit('selection'); G.requestRender();
+    G.emit('changed');
+    var st2 = [
+      { text: '半径 r = ' + G.fmt(cres.r) + (G.exact(cres.r) ? '（= ' + G.exact(cres.r) + '）' : '') },
+      { text: '圆心 (' + G.fmt(cres.c.x) + ', ' + G.fmt(cres.c.y) + ')（已标注为点 ' + cob.name.replace(/^⊙/, '') + '）' }
+    ];
+    if (cres.onCircle !== undefined && cres.total) st2.push({ text: '验证：' + cres.onCircle + ' / ' + cres.total + ' 个顶点在圆上' });
+    if (cres.kindNote) st2.push({ text: cres.kindNote });
+    st2.push({ text: '已生成「' + cob.name + '」', cls: 'ok' });
+    showResult({ title: nm2 + ' · ' + (po2.name || '多边形'), value: cres.r, steps: st2 });
+    toast('已生成' + nm2 + '（r = ' + G.fmt(cres.r) + '）', 'ok');
   } else if (act === 'dist') {
     showResult(G.distBetween3(sel[0], sel[1]));
   } else if (act === 'dihedral') {
@@ -8956,8 +9269,17 @@ console.log('[GeoStudio] 落地页交互已就绪');
     '4. {"type":"poly","pts":["A","B","C"],"kind":"tri|quad|para|rect|rhomb|square|trap|polygon"}',
     '5. {"type":"circle","center":"点名","r":数}',
     '6. {"type":"func","expr":"y=a*x-2"} 函数 / 方程曲线（平面；参数用 a~k，自动生成滑块）',
-    '7. {"type":"solid","kind":"cube|cuboid|prism|pyramid|tetra|cylinder|cone|sphere|frustum","dims":{...},"cx":0,"cy":0,"cz":0}',
+    '7. {"type":"solid","kind":"cube|cuboid|prism|pyramid|tetra|cylinder|cone|sphere|frustum","dims":{...},"cx":0,"cy":0,"cz":0,"name":"正方体"}（name 可选，供外接球等指令引用）',
     'dims 键名：cube={a}; cuboid={a,b,c}; prism={r,h,n}; pyramid={r,h,n}; tetra={a}; cylinder={r,h}; cone={r,h}; sphere={r}; frustum={r1,r2,h}',
+    '8. {"type":"circumsphere","of":"正方体"} 外接球（自动精算；of 也可以是点名数组如 ["A","B","C","D"]）',
+    '9. {"type":"insphere","of":"圆锥"} 内切球（of 为几何体名）',
+    '10. {"type":"circumcircle","of":["A","B","C"]} 外接圆（平面）',
+    '11. {"type":"incircle","of":["A","B","C"]} 内切圆（平面三角形 / 正多边形）',
+    '',
+    '【外接球 / 内切球问题的作图规则】',
+    '- 先建出几何体（solid 指令要带 name，如 "name":"正方体"）或关键顶点（point），再调用 circumsphere / insphere / circumcircle / incircle 指令',
+    '- 严禁手动摆一个尺寸相近的球或圆代替：一律用上述指令精算生成',
+    '- 解析中给出球心位置与半径的推理（如长方体 R = √(a²+b²+c²)/2、正方体 R = √3a/2、正四面体 R = √6a/4）',
     '',
     '【示例】题目："正方体棱长 2，求体对角线长" 的输出（仅示范格式，实际请解用户给的题）：',
     '{"mode":"solid","objects":[{"type":"solid","kind":"cube","dims":{"a":2},"cx":0,"cy":0,"cz":0},{"type":"point","name":"A","x":1,"y":-1,"z":0},{"type":"point","name":"C1","x":-1,"y":1,"z":2},{"type":"segment","a":"A","b":"C1"}],"analysis":"设正方体棱长为 2。\\n面对角线 = √2·a = 2√2（勾股定理）。\\n体对角线 = √(a² + (√2a)²) = √3·a（再对体对角线用一次勾股定理）。\\n代入 a = 2 得 d = 2√3。","answer":"体对角线长 = 2√3"}'
@@ -9036,6 +9358,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
       return ((a && a.type === 'point') ? 0 : 1) - ((b && b.type === 'point') ? 0 : 1);
     });
     var byName = {};
+    var solidsByName = {};
     var made = [];
     var i = 0;
     function apply(spec) {
@@ -9061,6 +9384,36 @@ console.log('[GeoStudio] 落地页交互已就绪');
         if (!c) return null;
         o = { type: 'circle', mode: mode, name: '⊙' + c.name, cid: c.id, r: Math.max(0.2, num(spec.r) || 1.5), fill: true };
         G.Scene.add(o);
+      } else if (spec.type === 'circumsphere' || spec.type === 'insphere') {
+        /* 外接球 / 内切球（of: 几何体名 或 点名数组） */
+        var tgt = null, tpts = null;
+        if (typeof spec.of === 'string') {
+          tgt = solidsByName[spec.of] || solidsByName[String(spec.of).replace(/\s/g, '')] || null;
+          if (!tgt) {
+            var sk = Object.keys(solidsByName).find(function (k) { return k.replace(/\s/g, '') === String(spec.of).replace(/\s/g, ''); });
+            if (sk) tgt = solidsByName[sk];
+          }
+        } else if (Array.isArray(spec.of)) {
+          tpts = spec.of.map(function (n) { return byName[n]; }).filter(Boolean);
+        }
+        var sfs = null;
+        if (tgt && tgt.type === 'solid' && tgt.kind !== 'sphere') {
+          sfs = (spec.type === 'circumsphere') ? G.circumSphereOf(tgt) : G.inscribedSphereOf(tgt);
+        } else if (tpts && tpts.length >= 2 && spec.type === 'circumsphere') {
+          var mb = G.minBall3(tpts.map(function (p) { return { x: p.x, y: p.y, z: p.z || 0 }; }));
+          if (mb) sfs = { c: mb.c, r: mb.r, kindNote: '以所选顶点的最小包围球' };
+        }
+        if (!sfs) return null;
+        var sphA = G.addSphereObj(sfs.c, sfs.r, G.nameOf((spec.type === 'circumsphere' ? '外接球 ' : '内切球 '), 'sphere'));
+        if (spec.name) sphA.name = String(spec.name).slice(0, 12);
+        o = sphA;
+      } else if (spec.type === 'circumcircle' || spec.type === 'incircle') {
+        /* 外接圆 / 内切圆（平面；of 为点名数组） */
+        var pls = (spec.of || []).map(function (n) { return byName[n]; }).filter(Boolean);
+        if (pls.length < 3) return null;
+        var crs = (spec.type === 'circumcircle') ? G.circumCircle2(pls) : G.incircleOf2(pls);
+        if (!crs) return null;
+        o = G.addCircleObj(crs.c, crs.r, null);
       } else if (spec.type === 'func') {
         /* 函数 / 方程曲线（支持参数 a~k，工坊自动生成滑块） */
         var expr = String(spec.expr || '').trim();
@@ -9082,6 +9435,8 @@ console.log('[GeoStudio] 落地页交互已就绪');
           dims: dims, cx: num(spec.cx), cy: num(spec.cy), cz: num(spec.cz)
         };
         G.Scene.add(o);
+        if (spec.name) o.name = String(spec.name).slice(0, 12);
+        solidsByName[o.name] = o;   /* 供外接球 / 内切球指令引用 */
       }
       if (o) made.push(o);
       return o;
