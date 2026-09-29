@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<!-- CSP：本地单文件需内联脚本与动态编译（unsafe-eval），但外发通道全部锁死（connect-src 'none'）。
+<!-- CSP：本地单文件需内联脚本与动态编译（unsafe-eval）；唯一外发通道为 DeepSeek API（AI 出图功能），其余全部锁死。
      注意：若部署为在线版，请改为 nonce/hash 方案并把表达式求值换成解释器，移除 unsafe-eval -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; font-src https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; font-src https://cdn.jsdelivr.net; img-src 'self' data:; connect-src https://api.deepseek.com; base-uri 'none'; form-action 'none'">
 <meta name="description" content="几何工坊：面向高中数学教学的平面几何与立体几何可视化工作台。函数方程实时绘制、向量关系自动判定、面积体积距离二面角一键求解、参数滑块实时联动">
 <meta name="color-scheme" content="dark light">
 <title>几何工坊 · 高中数学几何教学工作台</title>
@@ -773,6 +773,45 @@ body.pure .fold-tab{display:flex}
 .obj-row.child .name{font-size:12.5px}
 .obj-row.child .swatch{width:8px;height:8px}
 
+
+/* ============================================================
+   AI 出图（DeepSeek 接入）：输入栏下方的智能建造入口
+   ============================================================ */
+.ai-box{padding:12px 14px;border-top:1px solid var(--line);background:var(--glass-2)}
+.ai-head{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.ai-title{font-size:12.5px;font-weight:800;color:var(--t1);display:inline-flex;align-items:center;gap:6px;letter-spacing:.3px}
+.ai-title .ic{color:var(--brand-2,#06b6d4)}
+.ai-key-state{font-size:10.5px;color:var(--t3);margin-left:auto}
+.ai-key-btn{border:0;background:transparent;cursor:pointer;font-size:13px;padding:2px 5px;border-radius:6px;line-height:1.2}
+.ai-key-btn:hover{background:var(--line)}
+.ai-key-row{display:flex;gap:6px;margin-bottom:8px}
+.ai-key-row input{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:12px;background:var(--glass-3);color:var(--t1);outline:none;font-family:inherit}
+.ai-key-row input:focus{border-color:var(--brand)}
+.ai-input-line textarea{width:100%;resize:none;border:1px solid var(--line);border-radius:10px;padding:9px 11px;font-size:12.5px;line-height:1.55;background:var(--glass-3);color:var(--t1);outline:none;font-family:inherit;box-sizing:border-box;transition:border-color .2s ease,box-shadow .2s ease}
+.ai-input-line textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(137,194,255,.16)}
+.ai-actions{display:flex;gap:8px;margin-top:9px}
+.ai-go{flex:1;position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:7px}
+.ai-go .ic{width:14px;height:14px}
+.ai-go.busy{pointer-events:none;opacity:.9}
+.ai-go.busy::after{content:'';position:absolute;inset:0;background:linear-gradient(105deg,transparent 25%,rgba(255,255,255,.38) 50%,transparent 75%);animation:aiShimmer 1.05s linear infinite}
+@keyframes aiShimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.ai-status{font-size:11.5px;color:var(--t3);margin-top:9px;line-height:1.65;opacity:0;transform:translateY(-4px);transition:opacity .35s ease,transform .35s ease}
+.ai-status.show{opacity:1;transform:none}
+.ai-status.ok{color:#22c55e}
+.ai-status.warn{color:#f59e0b}
+.ai-status.err{color:#ef4444}
+.ai-status .ai-spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(14,165,233,.22);border-top-color:#0ea5e9;border-radius:50%;animation:aiSpin .8s linear infinite;vertical-align:-1px;margin-right:6px}
+@keyframes aiSpin{to{transform:rotate(360deg)}}
+.ai-box.shake{animation:aiShake .4s ease}
+@keyframes aiShake{0%,100%{transform:none}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+/* 解析卡滑入 */
+.result-card{animation:rcIn .5s cubic-bezier(.2,.85,.3,1.05)}
+@keyframes rcIn{from{opacity:0;transform:translateY(12px) scale(.975)}to{opacity:1;transform:none}}
+@media (max-width:620px){
+  .ai-input-line textarea{font-size:13px}
+  .ai-go{min-height:42px}
+}
+
 /* ============================================================
    12. 全局补充与无障碍
    ============================================================ */
@@ -1103,6 +1142,27 @@ body.pure .fold-tab{display:flex}
               </div>
               <p class="hint">拖拽旋转视角、滚轮缩放、Shift 加拖拽平移；几何体可一键求体积与表面积，选中两点也能连线、三点定平面</p>
             </div>
+          </div>
+          <!-- ✨ AI 出图（DeepSeek 接入）：输入题目自动建造 + 解析 -->
+          <div class="ai-box" id="aiBox">
+            <div class="ai-head">
+              <span class="ai-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-spark"/></svg>AI 出图</span>
+              <span class="ai-key-state" id="aiKeyState">未设置 Key</span>
+              <button class="ai-key-btn" id="aiKeyBtn" type="button" title="设置 DeepSeek API Key（只存本机）">🔑</button>
+            </div>
+            <div class="ai-key-row" id="aiKeyRow" style="display:none">
+              <input type="password" id="aiKeyInput" placeholder="sk-…（DeepSeek Key，只存本机）" autocomplete="off" spellcheck="false">
+              <button class="btn btn-primary btn-sm" id="aiKeySave" type="button">保存</button>
+            </div>
+            <div class="ai-input-line">
+              <textarea id="aiInput" rows="2" placeholder="输入题目，AI 自动建图并给解析，如：正方体棱长 2，求体对角线长" spellcheck="false"></textarea>
+            </div>
+            <div class="ai-actions">
+              <button class="btn btn-primary ai-go" id="aiGo" type="button">
+                <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-spark"/></svg><span>AI 分析并建造</span>
+              </button>
+            </div>
+            <div class="ai-status" id="aiStatus"></div>
           </div>
           <div class="obj-box">
             <div class="obj-head"><span>对象</span><span class="obj-tip">双击名字或点铅笔可改名</span><span id="obj-count">0</span></div>
@@ -6814,6 +6874,7 @@ function clearResult() {
   G._diagram3 = null;
 }
 G.clearResult = clearResult;
+G.showResult = showResult;
 
 function showResult(res, extraUI) {
   if (!res) { toast('这个组合暂时不支持计算', 'warn'); return; }
@@ -8692,6 +8753,377 @@ if (fh) {
 }
 
 console.log('[GeoStudio] 落地页交互已就绪');
+})();
+/* ============================================================
+   几何工坊 · JS 6/6：AI 出图（DeepSeek API 接入）
+   输入题目 → AI 解析为场景 schema → 自动识别平面/立体并切换模式
+   → 渐次建造（逐个出现）→ 镜头平滑适配 → 生成解析与答案
+   唯一外发通道：https://api.deepseek.com（见 CSP connect-src）
+   ============================================================ */
+(function () {
+  'use strict';
+  var G = window.__Geo;
+  if (!G) return;
+  var $ = function (id) { return document.getElementById(id); };
+  var KEY_STORE = 'geo-ai-key';
+  var API_URL = 'https://api.deepseek.com/chat/completions';
+
+  /* -- API Key（只存本机）-- */
+  function getKey() { try { return localStorage.getItem(KEY_STORE) || ''; } catch (e) { return ''; } }
+  function setKey(k) { try { localStorage.setItem(KEY_STORE, k); } catch (e) {} }
+  function syncKeyState() {
+    var el = $('aiKeyState');
+    if (el) el.textContent = getKey() ? '已接入 DeepSeek' : '未设置 Key';
+  }
+
+  /* -- 状态行 -- */
+  function status(html, cls, spin) {
+    var el = $('aiStatus');
+    if (!el) return;
+    el.innerHTML = (spin ? '<span class="ai-spin"></span>' : '') + html;
+    el.className = 'ai-status show' + (cls ? ' ' + cls : '');
+  }
+  function statusFade() {
+    var el = $('aiStatus');
+    if (el) el.className = 'ai-status';
+  }
+  function shake() {
+    var el = $('aiBox');
+    if (!el) return;
+    el.classList.add('shake');
+    setTimeout(function () { el.classList.remove('shake'); }, 450);
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  /* -- 系统提示词：约束 AI 输出结构化 JSON -- */
+  var SYS = [
+    '你是中学几何作图助手。根据用户题目，只输出一个 JSON（不要任何解释文字、不要 ``` 代码块标记）：',
+    '{',
+    '  "mode": "plane" 或 "solid",',
+    '  "objects": [ 若干指令 ],',
+    '  "analysis": "分步解析（中文，\\n 分隔每一步，含所用定理与关键计算）",',
+    '  "answer": "最终答案（简洁，含单位）"',
+    '}',
+    'objects 指令（按顺序执行，引用的点必须先出现）：',
+    '1. {"type":"point","name":"A","x":数,"y":数,"z":数}（z 立体题才用，平面题省略）',
+    '2. {"type":"segment","a":"点名","b":"点名"} 线段',
+    '3. {"type":"line","a":"点名","b":"点名"} 直线',
+    '4. {"type":"poly","pts":["A","B","C"],"kind":"tri|quad|para|rect|rhomb|square|trap|polygon"}',
+    '5. {"type":"circle","center":"点名","r":数}',
+    '6. {"type":"solid","kind":"cube|cuboid|prism|pyramid|tetra|cylinder|cone|sphere|frustum","dims":{...},"cx":0,"cy":0,"cz":0}',
+    'dims 键名：cube={a}; cuboid={a,b,c}; prism={r,h,n}; pyramid={r,h,n}; tetra={a}; cylinder={r,h}; cone={r,h}; sphere={r}; frustum={r1,r2,h}',
+    '作图规则：',
+    '- 把题目涉及的图形完整建出来：顶点、棱、面（必要或多边形）、关键辅助线；',
+    '- 平面题坐标放在中心附近（各分量绝对值 ≤ 8），不要想象超出题意的图形；',
+    '- 立体题的几何体放在原点附近，尺寸取题目数值；题目数值缺失时取整洁值（如棱长 2）；',
+    '- 点名用常规写法（A、B、C、A1、B1 或 A₁、B₁；不用空格与括号）；',
+    '- 平面题只需平面对象；立体题只能使用 solid / point / segment / line（不要 poly 作为立体面，除非题目给了具体顶点坐标）。'
+  ].join('\n');
+
+  /* -- 调 DeepSeek -- */
+  function callAI(question, cb, onErr) {
+    var key = getKey();
+    if (!key) { onErr('尚未设置 API Key：点右上角 🔑 填入 DeepSeek Key（只存本机）'); return; }
+    var ctrl = null, timer = null;
+    try {
+      ctrl = new AbortController();
+      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 60000);
+    } catch (e) {}
+    fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'system', content: SYS }, { role: 'user', content: question }],
+        temperature: 0.2,
+        max_tokens: 3000
+      }),
+      signal: ctrl ? ctrl.signal : undefined
+    }).then(function (r) {
+      if (timer) clearTimeout(timer);
+      if (r.status === 401) throw new Error('API Key 无效或已过期（401），请点 🔑 重新填写');
+      if (!r.ok) return r.text().then(function (t) { throw new Error('API 错误 ' + r.status + '：' + String(t).slice(0, 140)); });
+      return r.json();
+    }).then(function (j) {
+      var txt = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+      var data = parseJSON(txt);
+      if (!data || !data.objects || !data.objects.length) {
+        onErr('AI 返回的内容无法解析成图形（可能题目太复杂），请换个说法再试');
+        return;
+      }
+      cb(data);
+    }).catch(function (e) {
+      if (timer) clearTimeout(timer);
+      var msg = String((e && e.message) || e);
+      if (/aborted|AbortError/i.test(msg)) msg = '请求超时（60 秒），请重试';
+      else if (/Failed to fetch|NetworkError|network/i.test(msg)) msg = '网络请求失败：请检查网络（API 需联网访问）';
+      onErr(msg);
+    });
+  }
+  function parseJSON(txt) {
+    if (!txt) return null;
+    var s = String(txt).trim();
+    var m = s.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (m) s = m[1].trim();
+    var a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { return null; }
+  }
+
+  /* -- Schema → 场景执行器 -- */
+  var POLY_PREFIX = { tri: '△', quad: '四边形', para: '平行四边形', rect: '矩形', rhomb: '菱形', square: '正方形', trap: '梯形', polygon: '多边形' };
+  var SOLID_KINDS = { cube: 1, cuboid: 1, prism: 1, pyramid: 1, tetra: 1, cylinder: 1, cone: 1, sphere: 1, frustum: 1 };
+  function num(v) { var x = parseFloat(v); return isFinite(x) ? x : 0; }
+
+  function buildScene(data, onProgress, onDone) {
+    var mode = (data.mode === 'solid') ? 'solid' : 'plane';
+    var switched = (G.Scene.mode !== mode);
+    if (switched) {
+      G.ui.setMode(mode);
+      G.flash('AI 识别为' + (mode === 'solid' ? '立体' : '平面') + '几何题，已自动切换模式');
+    }
+    /* 清空目标模式的场景（另一模式的对象保留） */
+    G.Scene.clear(mode);
+    /* 点优先（保证引用可用），其余保持原顺序 */
+    var seq = (data.objects || []).slice().sort(function (a, b) {
+      return ((a && a.type === 'point') ? 0 : 1) - ((b && b.type === 'point') ? 0 : 1);
+    });
+    var byName = {};
+    var made = [];
+    var i = 0;
+    function apply(spec) {
+      if (!spec || typeof spec !== 'object') return null;
+      var o = null;
+      if (spec.type === 'point') {
+        o = G.mkp(null, num(spec.x), num(spec.y), num(spec.z));
+        if (spec.name) o.name = String(spec.name).slice(0, 10);
+        if (o.name) byName[o.name] = o;
+      } else if (spec.type === 'segment' || spec.type === 'line') {
+        var a = byName[spec.a], b = byName[spec.b];
+        if (!a || !b) return null;
+        o = G.mkseg(a, b);
+        if (spec.type === 'line') o.type = 'line';
+      } else if (spec.type === 'poly') {
+        var ps = (spec.pts || []).map(function (n) { return byName[n]; }).filter(Boolean);
+        if (ps.length < 3) return null;
+        var kind = POLY_PREFIX[spec.kind] ? spec.kind : 'polygon';
+        var nm = (POLY_PREFIX[kind] || '') + ps.map(function (p) { return p.name; }).join('');
+        o = G.mkpoly(ps, nm.slice(0, 18), kind);
+      } else if (spec.type === 'circle') {
+        var c = byName[spec.center];
+        if (!c) return null;
+        o = { type: 'circle', mode: mode, name: '⊙' + c.name, cid: c.id, r: Math.max(0.2, num(spec.r) || 1.5), fill: true };
+        G.Scene.add(o);
+      } else if (spec.type === 'solid') {
+        var k = SOLID_KINDS[spec.kind] ? spec.kind : 'cuboid';
+        var dims = G.defaultDims(k);
+        if (spec.dims) {
+          Object.keys(spec.dims).forEach(function (key) {
+            if (dims[key] !== undefined && isFinite(parseFloat(spec.dims[key]))) dims[key] = parseFloat(spec.dims[key]);
+          });
+        }
+        o = {
+          type: 'solid', mode: 'solid', kind: k,
+          name: G.nameOf((G.SOLID_LABEL[k] || '几何体') + ' ', k),
+          dims: dims, cx: num(spec.cx), cy: num(spec.cy), cz: num(spec.cz)
+        };
+        G.Scene.add(o);
+      }
+      if (o) made.push(o);
+      return o;
+    }
+    var gap = Math.max(70, Math.min(210, Math.round(1300 / Math.max(1, seq.length))));
+    function step() {
+      if (i >= seq.length) { afterBuild(); return; }
+      try { apply(seq[i]); } catch (e) { /* 单条坏指令跳过 */ }
+      i++;
+      G.emit('objects'); G.emit('selection'); G.requestRender();
+      if (onProgress) onProgress(i, seq.length);
+      setTimeout(step, gap);
+    }
+    /* -- 镜头平滑适配（0.7s 补间）-- */
+    function collectBounds() {
+      var xs = [], ys = [], zs = [];
+      G.Scene.objs.forEach(function (o) {
+        if ((o.mode || 'plane') !== mode) return;
+        if (o.type === 'point') { xs.push(o.x); ys.push(o.y); zs.push(o.z || 0); }
+        else if (o.type === 'solid') {
+          (G.solidKeyPts(o) || []).forEach(function (p) { xs.push(p.x); ys.push(p.y); zs.push(p.z || 0); });
+        } else if (o.type === 'circle' && o.cid) {
+          var c = G.Scene.byId(o.cid);
+          if (c) { xs.push(c.x - o.r, c.x + o.r); ys.push(c.y - o.r, c.y + o.r); zs.push(0); }
+        }
+      });
+      if (!xs.length) return null;
+      var mn = function (arr) { return Math.min.apply(null, arr); };
+      var mx = function (arr) { return Math.max.apply(null, arr); };
+      return { x0: mn(xs), x1: mx(xs), y0: mn(ys), y1: mx(ys), z0: mn(zs), z1: mx(zs) };
+    }
+    function tween(ms, fn, done, finalFn) {
+      /* rAF 补间 + 超时兜底：后台标签页 rAF 被冻结时也能落定終值并回调（避免流程卡死） */
+      var finished = false;
+      function finish() {
+        if (finished) return;
+        finished = true;
+        if (finalFn) finalFn();
+        if (done) done();
+      }
+      var t0 = performance.now();
+      function frame(t) {
+        if (finished) return;
+        var p = Math.min(1, (t - t0) / ms);
+        fn(1 - Math.pow(1 - p, 3));
+        if (p < 1) requestAnimationFrame(frame);
+        else finish();
+      }
+      requestAnimationFrame(frame);
+      setTimeout(finish, ms + 500);
+    }
+    function fitView(animated, done) {
+      var b = collectBounds();
+      if (!b) { if (done) done(); return; }
+      if (mode === 'plane') {
+        var v = G.view2;
+        var spanX = Math.max(1.2, b.x1 - b.x0), spanY = Math.max(1.2, b.y1 - b.y0);
+        var cv = $('canvas');
+        var W = cv ? cv.clientWidth : 800, H = cv ? cv.clientHeight : 600;
+        var scale = G.clamp(Math.min(W * 0.68 / spanX, H * 0.68 / spanY), v.min, v.max);
+        var cx2 = (b.x0 + b.x1) / 2, cy2 = (b.y0 + b.y1) / 2;
+        var f0 = { cx: v.cx, cy: v.cy, s: v.scale };
+        var fin = function () { v.cx = cx2; v.cy = cy2; v.scale = scale; G.requestRender(); };
+        if (!animated) { fin(); if (done) done(); return; }
+        tween(700, function (e) {
+          v.cx = f0.cx + (cx2 - f0.cx) * e;
+          v.cy = f0.cy + (cy2 - f0.cy) * e;
+          v.scale = f0.s + (scale - f0.s) * e;
+          G.requestRender();
+        }, done, fin);
+      } else {
+        var cam = G.cam3;
+        var span = Math.max(2, b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0);
+        var tx = (b.x0 + b.x1) / 2, ty = (b.y0 + b.y1) / 2, tz = (b.z0 + b.z1) / 2;
+        var dist = G.clamp(span * 1.75 + 4, 5, 130);
+        var c0 = { tx: cam.tx, ty: cam.ty, tz: cam.tz, d: cam.dist };
+        var fin2 = function () { cam.tx = tx; cam.ty = ty; cam.tz = tz; cam.dist = dist; G.requestRender(); };
+        if (!animated) { fin2(); if (done) done(); return; }
+        tween(700, function (e) {
+          cam.tx = c0.tx + (tx - c0.tx) * e;
+          cam.ty = c0.ty + (ty - c0.ty) * e;
+          cam.tz = c0.tz + (tz - c0.tz) * e;
+          cam.dist = c0.d + (dist - c0.d) * e;
+          G.requestRender();
+        }, done, fin2);
+      }
+    }
+    function afterBuild() {
+      /* 几何体标点立即预生成（不等下一帧绘制，树与画布即刻完整） */
+      made.forEach(function (o2) {
+        if (o2.type === 'solid' && G.ensureSolidPts) {
+          try { G.ensureSolidPts(o2); } catch (e) {}
+        }
+      });
+      G.Scene.setSel([]);
+      G.emit('objects'); G.emit('selection'); G.requestRender();
+      G.emit('changed');   /* 记撤销点：一次撤销可回到 AI 建造之前 */
+      fitView(true, function () {
+        showAnalysis(data, made.length);
+        if (onDone) onDone(made.length);
+      });
+    }
+    step();
+  }
+
+  /* -- 解析与答案卡片 -- */
+  function showAnalysis(data, n) {
+    var steps = [];
+    steps.push({ text: '已建造 ' + n + ' 个对象' + ((data.mode === 'solid') ? '（立体几何）' : '（平面几何）') + '，可拖动调整、继续测算' });
+    String(data.analysis || '').split('\n').forEach(function (line) {
+      var t = line.trim();
+      if (t) steps.push({ text: t });
+    });
+    if (data.answer) steps.push({ text: '✦ 答案：' + String(data.answer), cls: 'ok' });
+    if (G.showResult) {
+      G.showResult({ title: '✨ AI 解析 · ' + (String(data.answer || '').slice(0, 24) || '完成'), steps: steps });
+    }
+  }
+
+  /* -- 主流程 -- */
+  var running = false;
+  function runAI() {
+    if (running) return;
+    var input = $('aiInput');
+    var q = input ? input.value.trim() : '';
+    if (!q) { status('先在上方输入一道题目吧', 'warn'); shake(); return; }
+    running = true;
+    var btn = $('aiGo');
+    if (btn) { btn.classList.add('busy'); }
+    status('正在分析题目…', '', true);
+    var t0 = Date.now();
+    callAI(q, function (data) {
+      status('题目解析完成，正在建造图形…', '', true);
+      /* 让「分析完成」的状态闪一下再进入建造，节奏更自然 */
+      setTimeout(function () {
+        buildScene(data,
+          function (i, total) { status('正在建造图形…（' + i + '/' + total + '）', '', true); },
+          function (n) {
+            var sec = ((Date.now() - t0) / 1000).toFixed(1);
+            status('✨ 完成！已建造 ' + n + ' 个对象（' + sec + 's），右上解析卡可查看步骤与答案', 'ok');
+            setTimeout(statusFade, 6000);
+            running = false;
+            if (btn) btn.classList.remove('busy');
+          });
+      }, 320);
+    }, function (err) {
+      status(esc(err), 'err');
+      shake();
+      running = false;
+      if (btn) btn.classList.remove('busy');
+    });
+  }
+
+  /* -- UI 绑定 -- */
+  function bind() {
+    var go = $('aiGo');
+    var input = $('aiInput');
+    if (go) go.addEventListener('click', runAI);
+    if (input) {
+      input.addEventListener('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); runAI(); }
+      });
+      input.addEventListener('input', function () { if (!input.value.trim()) statusFade(); });
+    }
+    var keyBtn = $('aiKeyBtn'), keyRow = $('aiKeyRow'), keyInput = $('aiKeyInput'), keySave = $('aiKeySave');
+    if (keyBtn && keyRow) {
+      keyBtn.addEventListener('click', function () {
+        var show = keyRow.style.display === 'none' || !keyRow.style.display;
+        keyRow.style.display = show ? 'flex' : 'none';
+        if (show && keyInput) { keyInput.value = getKey(); keyInput.focus(); }
+      });
+    }
+    if (keySave && keyInput) {
+      keySave.addEventListener('click', function () {
+        var v = keyInput.value.trim();
+        if (!v) { status('请输入有效的 Key', 'warn'); return; }
+        setKey(v);
+        syncKeyState();
+        keyRow.style.display = 'none';
+        status('API Key 已保存（仅存本机浏览器）', 'ok');
+        setTimeout(statusFade, 3000);
+      });
+      keyInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') keySave.click(); });
+    }
+    syncKeyState();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+
+  /* 诊断钩子（测试用） */
+  G._ai = { parseJSON: parseJSON, build: buildScene, run: runAI };
+  console.log('[GeoStudio] AI 出图模块已就绪');
 })();
 
 </script>
