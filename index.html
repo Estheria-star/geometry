@@ -832,6 +832,12 @@ body.pure .fold-tab{display:flex}
 .ai-status.err{color:#ef4444}
 .ai-status .ai-spin{display:inline-block;width:11px;height:11px;border:2px solid rgba(14,165,233,.22);border-top-color:#0ea5e9;border-radius:50%;animation:aiSpin .8s linear infinite;vertical-align:-1px;margin-right:6px}
 @keyframes aiSpin{to{transform:rotate(360deg)}}
+.ai-deep{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:var(--t3);cursor:pointer;user-select:none;line-height:1.5}
+.ai-deep input{accent-color:#6366f1;cursor:pointer;margin:0;flex:0 0 auto}
+.ai-deep input:checked + span{color:var(--brand-2,#06b6d4);font-weight:700}
+/* 解析卡步骤高亮（ok=答案行） */
+.result-card .step.ok{color:#22c55e;font-weight:700}
+.result-card .step.warn{color:#f59e0b}
 .ai-pop.shake{animation:aiShake .4s ease}
 @keyframes aiShake{0%,100%{transform:none}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 /* 解析卡滑入 */
@@ -1456,6 +1462,7 @@ body.pure .fold-tab{display:flex}
         <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-spark"/></svg><span>AI 分析并建造</span>
       </button>
     </div>
+    <label class="ai-deep" id="aiDeepLbl"><input type="checkbox" id="aiDeep"><span>深度推理（R1 · 更准更慢，压轴题建议勾选）</span></label>
     <div class="ai-status" id="aiStatus"></div>
   </div>
   <button class="ai-fab-btn" id="aiFabBtn" type="button" title="AI 出图：点击展开 · 按住可拖动" aria-label="AI 出图" aria-expanded="false">
@@ -6921,7 +6928,7 @@ function showResult(res, extraUI) {
   if (!isFinite(res.value) && !(res.steps && res.steps.length)) { toast('无法计算', 'warn'); return; }
   var html = '<div class="result-card"><h5>' + svgIc('i-sigma', 14) + esc(res.title) + '</h5>';
   (res.steps || []).forEach(function (s) {
-    html += '<div class="step' + (s.cls === 'dim' ? ' dim' : '') + '">' + esc(s.text).replace(/\n/g, '<br>') + '</div>';
+    html += '<div class="step' + (s.cls ? ' ' + s.cls : '') + '">' + esc(s.text).replace(/\n/g, '<br>') + '</div>';
   });
   if (extraUI) html += extraUI;
   html += '<div class="result-actions">' +
@@ -8839,49 +8846,63 @@ console.log('[GeoStudio] 落地页交互已就绪');
     });
   }
 
-  /* -- 系统提示词：约束 AI 输出结构化 JSON -- */
+  /* -- 系统提示词：完整解题 + 精确保图 + 结构化 JSON -- */
   var SYS = [
-    '你是中学几何作图助手。根据用户题目，只输出一个 JSON（不要任何解释文字、不要 ``` 代码块标记）：',
+    '你是资深高中数学老师，同时是几何作图引擎。用户给出一道几何题（可能包含输入噪声，如 L 实为 ∠、mc 实为 mx、字母错位等，请按数学语境合理理解），你要：① 严谨完整地解题 ② 输出作图指令 ③ 给出解析与答案。',
+    '',
+    '只输出一个 JSON（不要任何解释文字、不要 ``` 代码块标记）：',
     '{',
     '  "mode": "plane" 或 "solid",',
-    '  "objects": [ 若干指令 ],',
-    '  "analysis": "分步解析（中文，\\n 分隔每一步，含所用定理与关键计算）",',
-    '  "answer": "最终答案（简洁，含单位）"',
+    '  "objects": [ 作图指令 ],',
+    '  "analysis": "完整解题过程（中文，\\n 分隔每一步）",',
+    '  "answer": "最终答案"',
     '}',
-    'objects 指令（按顺序执行，引用的点必须先出现）：',
-    '1. {"type":"point","name":"A","x":数,"y":数,"z":数}（z 立体题才用，平面题省略）',
+    '',
+    '【解题要求】',
+    '- analysis 必须完整可教学：写明所用定理 / 公式，列出关键式子并代入数值，逐步推导到结论；必要时分类讨论；每一步单独一行（\\n 分隔）',
+    '- 数学符号直接使用 Unicode：∠ ⊥ ∥ △ ∴ ∵ √ ² ³ ° ≤ ≥ ≠ ∈ ∪ ∩ ₁ ₂；分数写 a/b',
+    '- answer 给最终结论（范围类写完整，如：m ∈ (-∞,-5] ∪ [1,+∞)）',
+    '',
+    '【作图要求】',
+    '- 平面解析几何：题目给定的坐标直接使用；含参数的直线 / 曲线用 func 指令且参数用 a（工坊自动生成滑块，可拖动观察），例如直线 y=mx-2 写 {"type":"func","expr":"y=a*x-2"}；固定曲线同样用 func',
+    '- 立体几何：自行选择方便的原点与坐标轴（通常底面一个顶点为原点、棱沿坐标轴），用题目全部数据【精确计算】每个顶点坐标（含 √2 √3、45° 60°、中点等），顶点用 point 逐个输出；棱用 segment；待求的二面角 / 距离等涉及的辅助线也要画出',
+    '- 关键顶点、边、对角线、辅助线尽量画全，让图形自带解题线索',
+    '- 同一顶点只输出一次 point（后续引用点名）；坐标保留不超过 4 位小数',
+    '',
+    '【objects 指令】',
+    '1. {"type":"point","name":"A","x":数,"y":数,"z":数}（z 仅立体用）',
     '2. {"type":"segment","a":"点名","b":"点名"} 线段',
     '3. {"type":"line","a":"点名","b":"点名"} 直线',
     '4. {"type":"poly","pts":["A","B","C"],"kind":"tri|quad|para|rect|rhomb|square|trap|polygon"}',
     '5. {"type":"circle","center":"点名","r":数}',
-    '6. {"type":"solid","kind":"cube|cuboid|prism|pyramid|tetra|cylinder|cone|sphere|frustum","dims":{...},"cx":0,"cy":0,"cz":0}',
+    '6. {"type":"func","expr":"y=a*x-2"} 函数 / 方程曲线（平面；参数用 a~k，自动生成滑块）',
+    '7. {"type":"solid","kind":"cube|cuboid|prism|pyramid|tetra|cylinder|cone|sphere|frustum","dims":{...},"cx":0,"cy":0,"cz":0}',
     'dims 键名：cube={a}; cuboid={a,b,c}; prism={r,h,n}; pyramid={r,h,n}; tetra={a}; cylinder={r,h}; cone={r,h}; sphere={r}; frustum={r1,r2,h}',
-    '作图规则：',
-    '- 把题目涉及的图形完整建出来：顶点、棱、面（必要或多边形）、关键辅助线；',
-    '- 平面题坐标放在中心附近（各分量绝对值 ≤ 8），不要想象超出题意的图形；',
-    '- 立体题的几何体放在原点附近，尺寸取题目数值；题目数值缺失时取整洁值（如棱长 2）；',
-    '- 点名用常规写法（A、B、C、A1、B1 或 A₁、B₁；不用空格与括号）；',
-    '- 平面题只需平面对象；立体题只能使用 solid / point / segment / line（不要 poly 作为立体面，除非题目给了具体顶点坐标）。'
+    '',
+    '【示例】题目："正方体棱长 2，求体对角线长" 的输出（仅示范格式，实际请解用户给的题）：',
+    '{"mode":"solid","objects":[{"type":"solid","kind":"cube","dims":{"a":2},"cx":0,"cy":0,"cz":0},{"type":"point","name":"A","x":1,"y":-1,"z":0},{"type":"point","name":"C1","x":-1,"y":1,"z":2},{"type":"segment","a":"A","b":"C1"}],"analysis":"设正方体棱长为 2。\\n面对角线 = √2·a = 2√2（勾股定理）。\\n体对角线 = √(a² + (√2a)²) = √3·a（再对体对角线用一次勾股定理）。\\n代入 a = 2 得 d = 2√3。","answer":"体对角线长 = 2√3"}'
   ].join('\n');
 
   /* -- 调 DeepSeek -- */
-  function callAI(question, cb, onErr) {
+  function callAI(question, deep, cb, onErr) {
     var key = getKey();
     if (!key) { onErr('尚未设置 API Key：点右上角 🔑 填入 DeepSeek Key（只存本机）'); return; }
     var ctrl = null, timer = null;
+    var budget = deep ? 240000 : 90000;   /* 深度推理（R1）复杂题可能迭代几分钟 */
     try {
       ctrl = new AbortController();
-      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, 60000);
+      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, budget);
     } catch (e) {}
+    var body = {
+      model: deep ? 'deepseek-reasoner' : 'deepseek-chat',
+      messages: [{ role: 'system', content: SYS }, { role: 'user', content: question }],
+      max_tokens: deep ? 8000 : 4000
+    };
+    if (!deep) body.temperature = 0.2;   /* reasoner 不支持采样参数 */
     fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [{ role: 'system', content: SYS }, { role: 'user', content: question }],
-        temperature: 0.2,
-        max_tokens: 3000
-      }),
+      body: JSON.stringify(body),
       signal: ctrl ? ctrl.signal : undefined
     }).then(function (r) {
       if (timer) clearTimeout(timer);
@@ -8889,17 +8910,18 @@ console.log('[GeoStudio] 落地页交互已就绪');
       if (!r.ok) return r.text().then(function (t) { throw new Error('API 错误 ' + r.status + '：' + String(t).slice(0, 140)); });
       return r.json();
     }).then(function (j) {
-      var txt = (j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+      var msgObj = (j && j.choices && j.choices[0] && j.choices[0].message) || {};
+      var txt = msgObj.content || '';
       var data = parseJSON(txt);
       if (!data || !data.objects || !data.objects.length) {
-        onErr('AI 返回的内容无法解析成图形（可能题目太复杂），请换个说法再试');
+        onErr('AI 返回的内容无法解析成图形（可能题目太复杂），请换「深度推理」再试一次');
         return;
       }
       cb(data);
     }).catch(function (e) {
       if (timer) clearTimeout(timer);
       var msg = String((e && e.message) || e);
-      if (/aborted|AbortError/i.test(msg)) msg = '请求超时（60 秒），请重试';
+      if (/aborted|AbortError/i.test(msg)) msg = '请求超时（' + Math.round(budget / 1000) + ' 秒），请重试';
       else if (/Failed to fetch|NetworkError|network/i.test(msg)) msg = '网络请求失败：请检查网络（API 需联网访问）';
       onErr(msg);
     });
@@ -8958,6 +8980,13 @@ console.log('[GeoStudio] 落地页交互已就绪');
         if (!c) return null;
         o = { type: 'circle', mode: mode, name: '⊙' + c.name, cid: c.id, r: Math.max(0.2, num(spec.r) || 1.5), fill: true };
         G.Scene.add(o);
+      } else if (spec.type === 'func') {
+        /* 函数 / 方程曲线（支持参数 a~k，工坊自动生成滑块） */
+        var expr = String(spec.expr || '').trim();
+        if (!expr) return null;
+        if (!G.ui || !G.ui.addFuncStr) return null;
+        try { G.ui.addFuncStr(expr); } catch (e) { return null; }
+        o = G.Scene.objs[G.Scene.objs.length - 1];
       } else if (spec.type === 'solid') {
         var k = SOLID_KINDS[spec.kind] ? spec.kind : 'cuboid';
         var dims = G.defaultDims(k);
@@ -9100,10 +9129,19 @@ console.log('[GeoStudio] 落地页交互已就绪');
     if (!q) { status('先在上方输入一道题目吧', 'warn'); shake(); return; }
     running = true;
     var btn = $('aiGo');
+    var deepEl = $('aiDeep');
+    var deep = !!(deepEl && deepEl.checked);
     if (btn) { btn.classList.add('busy'); }
-    status('正在分析题目…', '', true);
     var t0 = Date.now();
-    callAI(q, function (data) {
+    /* 分析阶段：实时耗时显示（深度推理可能 1-3 分钟） */
+    var tick = setInterval(function () {
+      var sec = Math.round((Date.now() - t0) / 1000);
+      if (deep) status('深度推理中（DeepSeek-R1）…已用 ' + sec + 's，复杂题可能需要 1~3 分钟', '', true);
+      else status('正在分析题目…已用 ' + sec + 's', '', true);
+    }, 1000);
+    status(deep ? '深度推理中（DeepSeek-R1）…' : '正在分析题目…', '', true);
+    callAI(q, deep, function (data) {
+      clearInterval(tick);
       status('题目解析完成，正在建造图形…', '', true);
       /* 让「分析完成」的状态闪一下再进入建造，节奏更自然 */
       setTimeout(function () {
@@ -9111,13 +9149,14 @@ console.log('[GeoStudio] 落地页交互已就绪');
           function (i, total) { status('正在建造图形…（' + i + '/' + total + '）', '', true); },
           function (n) {
             var sec = ((Date.now() - t0) / 1000).toFixed(1);
-            status('✨ 完成！已建造 ' + n + ' 个对象（' + sec + 's），右上解析卡可查看步骤与答案', 'ok');
+            status('✨ 完成！已建造 ' + n + ' 个对象（' + sec + 's），解析卡可查看完整推导与答案', 'ok');
             setTimeout(statusFade, 6000);
             running = false;
             if (btn) btn.classList.remove('busy');
           });
       }, 320);
     }, function (err) {
+      clearInterval(tick);
       status(esc(err), 'err');
       shake();
       running = false;
