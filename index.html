@@ -1475,7 +1475,7 @@ body.pure .fold-tab{display:flex}
         <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-spark"/></svg><span>AI 分析并建造</span>
       </button>
     </div>
-    <label class="ai-deep" id="aiDeepLbl"><input type="checkbox" id="aiDeep"><span>深度推理（R1 · 更准更慢，压轴题建议勾选）</span></label>
+    <label class="ai-deep" id="aiDeepLbl"><input type="checkbox" id="aiDeep"><span>深度思考（V4 · 更准更慢，压轴题建议勾选）</span></label>
     <div class="ai-status" id="aiStatus"></div>
   </div>
   <button class="ai-fab-btn" id="aiFabBtn" type="button" title="AI 出图：点击展开 · 按住可拖动" aria-label="AI 出图" aria-expanded="false">
@@ -9298,45 +9298,72 @@ console.log('[GeoStudio] 落地页交互已就绪');
   function callAI(question, deep, cb, onErr, onCtrl) {
     var key = getKey();
     if (!key) { onErr('尚未设置 API Key：点右上角 🔑 填入 DeepSeek Key（只存本机）'); return; }
-    var ctrl = null, timer = null;
-    var budget = deep ? 240000 : 90000;   /* 深度推理（R1）复杂题可能迭代几分钟 */
-    try {
-      ctrl = new AbortController();
-      timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, budget);
-    } catch (e) {}
-    if (onCtrl && ctrl) onCtrl(function () { try { ctrl.abort(); } catch (e) {} });   /* 暴露中止入口（取消建造用） */
-    var body = {
-      model: deep ? 'deepseek-reasoner' : 'deepseek-chat',
-      messages: [{ role: 'system', content: SYS }, { role: 'user', content: question }],
-      max_tokens: deep ? 8000 : 4000
-    };
-    if (!deep) body.temperature = 0.2;   /* reasoner 不支持采样参数 */
-    fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-      body: JSON.stringify(body),
-      signal: ctrl ? ctrl.signal : undefined
-    }).then(function (r) {
-      if (timer) clearTimeout(timer);
-      if (r.status === 401) throw new Error('API Key 无效或已过期（401），请点 🔑 重新填写');
-      if (!r.ok) return r.text().then(function (t) { throw new Error('API 错误 ' + r.status + '：' + String(t).slice(0, 140)); });
-      return r.json();
-    }).then(function (j) {
-      var msgObj = (j && j.choices && j.choices[0] && j.choices[0].message) || {};
-      var txt = msgObj.content || '';
-      var data = parseJSON(txt);
-      if (!data || !data.objects || !data.objects.length) {
-        onErr('AI 返回的内容无法解析成图形（可能题目太复杂），请换「深度推理」再试一次');
-        return;
+    var budget = deep ? 300000 : 120000;   /* 深度思考（effort max）复杂题可能 2-5 分钟 */
+    var aborts = [];
+    if (onCtrl) onCtrl(function () { aborts.forEach(function (fn) { try { fn(); } catch (e) {} }); });
+    function httpErr(r) {
+      if (r.status === 401) return 'API Key 无效或已过期（401），请点 🔑 重新填写';
+      if (r.status === 402) return '账户余额不足（402），请到 DeepSeek 平台充值后再试';
+      if (r.status === 429) return '请求过于频繁（429），请稍等片刻再试';
+      if (r.status === 503) return '服务繁忙（503），请稍后重试';
+      return null;
+    }
+    function attempt(triesLeft) {
+      var ctrl = null, timer = null;
+      try {
+        ctrl = new AbortController();
+        timer = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, budget);
+      } catch (e) {}
+      if (ctrl) aborts.push(function () { try { ctrl.abort(); } catch (e) {} });
+      /* deepseek-flash（V4.1）：
+         普通 = 关闭思考（快）；深度 = 开启思考 + effort max（官方文档：thinking 字段直连 body；
+         思考模式不支持 temperature，故仅普通模式带温度） */
+      var body = {
+        model: 'deepseek-flash',
+        messages: [{ role: 'system', content: SYS }, { role: 'user', content: question }],
+        response_format: { type: 'json_object' },   /* 官方 JSON Output：SYS 已含 json 字样与样例 */
+        max_tokens: deep ? 20000 : 8000
+      };
+      if (deep) {
+        body.thinking = { type: 'enabled' };
+        body.reasoning_effort = 'max';
+      } else {
+        body.thinking = { type: 'disabled' };
+        body.temperature = 0.2;
       }
-      cb(data);
-    }).catch(function (e) {
-      if (timer) clearTimeout(timer);
-      var msg = String((e && e.message) || e);
-      if (/aborted|AbortError/i.test(msg)) msg = '请求超时（' + Math.round(budget / 1000) + ' 秒），请重试';
-      else if (/Failed to fetch|NetworkError|network/i.test(msg)) msg = '网络请求失败：请检查网络（API 需联网访问）';
-      onErr(msg);
-    });
+      fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify(body),
+        signal: ctrl ? ctrl.signal : undefined
+      }).then(function (r) {
+        if (timer) clearTimeout(timer);
+        var em = httpErr(r);
+        if (em) throw new Error(em);
+        if (!r.ok) return r.text().then(function (t) { throw new Error('API 错误 ' + r.status + '：' + String(t).slice(0, 140)); });
+        return r.json();
+      }).then(function (j) {
+        var msgObj = (j && j.choices && j.choices[0] && j.choices[0].message) || {};
+        var txt = msgObj.content || '';
+        var data = parseJSON(txt);
+        if ((!data || !data.objects || !data.objects.length) && triesLeft > 0) {
+          attempt(triesLeft - 1);   /* 空 content / 格式漂移：静默重试一次（官方说明 JSON 模式偶发空返回） */
+          return;
+        }
+        if (!data || !data.objects || !data.objects.length) {
+          onErr('AI 返回的内容无法解析成图形（已自动重试），请换个说法或勾选「深度思考」再试');
+          return;
+        }
+        cb(data);
+      }).catch(function (e) {
+        if (timer) clearTimeout(timer);
+        var msg = String((e && e.message) || e);
+        if (/aborted|AbortError/i.test(msg)) msg = '请求超时（' + Math.round(budget / 1000) + ' 秒）或已取消';
+        else if (/Failed to fetch|NetworkError|network/i.test(msg)) msg = '网络请求失败：请检查网络（API 需联网访问）';
+        onErr(msg);
+      });
+    }
+    attempt(1);
   }
   function parseJSON(txt) {
     if (!txt) return null;
@@ -9647,10 +9674,10 @@ console.log('[GeoStudio] 落地页交互已就绪');
     /* 分析阶段：实时耗时显示（深度推理可能 1-3 分钟） */
     tick = setInterval(function () {
       var sec = Math.round((Date.now() - t0) / 1000);
-      if (deep) status('深度推理中（DeepSeek-R1）…已用 ' + sec + 's，复杂题可能需要 1~3 分钟（点「取消建造」可中止）', '', true);
+      if (deep) status('深度思考中（DeepSeek V4）…已用 ' + sec + 's，复杂题可能需要 1~3 分钟（点「取消建造」可中止）', '', true);
       else status('正在分析题目…已用 ' + sec + 's', '', true);
     }, 1000);
-    status(deep ? '深度推理中（DeepSeek-R1）…' : '正在分析题目…', '', true);
+    status(deep ? '深度思考中（DeepSeek V4）…' : '正在分析题目…', '', true);
     callAI(q, deep, function (data) {
       if (aborted) return;
       clearInterval(tick); tick = null;
