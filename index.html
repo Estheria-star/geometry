@@ -6390,7 +6390,7 @@ function addPointStr(str, name, quiet) {
   var parsed = G.parsePointInput(str, Scene.mode);
   /* 先登记用到的参数（默认值 1），再求值坐标：否则「清空场景后输入 P(a, 2)」会因参数尚未注册而失败 */
   parsed.params.forEach(function (pn) {
-    if (!Scene.params[pn]) Scene.params[pn] = { value: 1, min: -5, max: 5, step: 0.05 };
+    if (!Scene.params[pn]) Scene.params[pn] = { value: 1, min: -10, max: 10, step: 0.05 };
   });
   var P = G.paramMap();
   var vals = parsed.comps.map(function (c) { return c.eval(0, 0, 0, 0, 0, P); });
@@ -6404,7 +6404,7 @@ function addPointStr(str, name, quiet) {
 function addVecStr(str, quiet) {
   var parsed = G.parseVectorInput(str, Scene.mode);
   parsed.params.forEach(function (pn) {
-    if (!Scene.params[pn]) Scene.params[pn] = { value: 1, min: -5, max: 5, step: 0.05 };
+    if (!Scene.params[pn]) Scene.params[pn] = { value: 1, min: -10, max: 10, step: 0.05 };
   });
   var P = G.paramMap();
   var vals = parsed.comps.map(function (c) { return c.eval(0, 0, 0, 0, 0, P); });
@@ -6418,6 +6418,8 @@ function addVecStr(str, quiet) {
   if (!quiet) toast('已添加向量 ' + o.name + (o._expr ? '（随参数联动）' : ''), 'ok');
   return o;
 }
+G.addPointStr = addPointStr;
+G.addVecStr = addVecStr;
 function mkp(name, x, y, z) {
   /* name 传 null 时自动命名（A、B、C…），图形顶点的默认命名走这里 */
   var o = { type: 'point', mode: Scene.mode, name: name || G.namePoint(), x: x, y: y, z: z || 0, params: [] };
@@ -9290,9 +9292,35 @@ console.log('[GeoStudio] 落地页交互已就绪');
     '- 向量条件先翻译成几何关系（如 PA·PC = 0 ⟺ PA ⊥ PC）再布置坐标；求最值的题要画出让目标量变化的关键结构（垂面、投影、临界位置）',
     '- 即使无法唯一确定图形，也必须画出符合题意的完整示意图（关键点 / 线 / 面 / 向量俱全），不得只给文字不画图',
     '',
+    '【含参问题的作图规则（重要）】',
+    '- 题目含参数（如 m、k、n、a 等）时，图形必须带上对应参数（自动生成可拖动滑块，观察参数变化），不要用某个固定数值替代',
+    '- 参数字母只使用 a、b、c、d、f、g、h、k 这 8 个；题目参数若是 m / k / n 等，映射到其中一个（如 m→a、k→b），并在解析中注明「下图中用 a 表示题中的 m」',
+    '- 含参直线 / 曲线：用 func 指令，如 y = mx - 2 → {"type":"func","expr":"y=a*x-2"}；含参的点：用 expr 字段写坐标表达式（不要用 x/y/z/t），如 点 P(2m, m−1) → {"type":"point","name":"P","expr":"(2a, a-1)"}；含参向量：{"type":"vector","expr":"(a, 2b)"}',
+    '- 解析中注明「拖动参数滑块可观察变化」，并给出参数的关键值 / 临界范围',
+    '',
+    '【多小问与常见难点的处理（重要）】',
+    '- 题目有 (1)(2)(3) 多个小问时：只建一次「完整的统一图」（含所有小问需要的元素与辅助线），解析按 (1)(2)(3) 分段逐问作答；不要只画第一问，也不要重复画多张图',
+    '- 点在棱 / 边上的分点（如 AA₂ = 1）：逐个精确计算分点坐标再输出（如 A₂ = A + (AA₂/AA₁)·(A₁ − A)），不要估算；点的命名可直接用 A2、B2 等形式',
+    '- 「当…时求…」的动点（如二面角 = 150° 时的 P）：先把方程解出来（解析中展示方程与求解），再按解出的位置把该点画出来；若有多解，把多个可能位置都画出并标注',
+    '- 正 n 棱柱 / 正多面体优先用 point 自建全部顶点（自己精确算坐标，最可控）；若用 solid 的 prism，注意 r 是底面外接圆半径（正方形边长 = r·√2）',
+    '',
     '【示例】题目："正方体棱长 2，求体对角线长" 的输出（仅示范格式，实际请解用户给的题）：',
     '{"mode":"solid","objects":[{"type":"solid","kind":"cube","dims":{"a":2},"cx":0,"cy":0,"cz":0},{"type":"point","name":"A","x":1,"y":-1,"z":0},{"type":"point","name":"C1","x":-1,"y":1,"z":2},{"type":"segment","a":"A","b":"C1"}],"analysis":"设正方体棱长为 2。\\n面对角线 = √2·a = 2√2（勾股定理）。\\n体对角线 = √(a² + (√2a)²) = √3·a（再对体对角线用一次勾股定理）。\\n代入 a = 2 得 d = 2√3。","answer":"体对角线长 = 2√3"}'
   ].join('\n');
+
+  /* ------- 参数字母映射：编译器仅支持 a b c d f g h k；
+     AI 若用了 m / n / p 等题目原字母，自动映射到安全字母（解析中由 AI 注明映射） ------- */
+  var PARAM_MAP = { m: 'a', n: 'b', p: 'c', q: 'd', r: 'f', s: 'g', u: 'h', v: 'k', w: 'a' };
+  function remapParamLetters(expr) {
+    if (typeof expr !== 'string' || !expr) return expr;
+    /* 单字母标识符替换：前缀允许数字（如 2m 的 m），后缀排除字母（保护 sin/cos 等函数名） */
+    return expr.replace(/(^|[^A-Za-z])([A-Za-z])(?![A-Za-z])/g, function (m0, pre, ch) {
+      var low = ch.toLowerCase();
+      if (/[xyzthXYZTH]/.test(ch)) return m0;   /* 变量与 θ 不动 */
+      var mp = PARAM_MAP[low];
+      return mp ? (pre + mp) : m0;
+    });
+  }
 
   /* -- 调 DeepSeek -- */
   function callAI(question, deep, cb, onErr, onCtrl) {
@@ -9401,9 +9429,22 @@ console.log('[GeoStudio] 落地页交互已就绪');
       if (!spec || typeof spec !== 'object') return null;
       var o = null;
       if (spec.type === 'point') {
-        o = G.mkp(null, num(spec.x), num(spec.y), num(spec.z));
-        if (spec.name) o.name = String(spec.name).slice(0, 10);
-        if (o.name) byName[o.name] = o;
+        /* 含参点：坐标写成表达式（expr 字段 或 x/y/z 字符串）→ 自动生成参数滑块并联动 */
+        var exprStr = null;
+        if (typeof spec.expr === 'string' && spec.expr.trim()) exprStr = spec.expr.trim();
+        else if (typeof spec.x === 'string' || typeof spec.y === 'string' || typeof spec.z === 'string') {
+          exprStr = '(' + (spec.x != null ? spec.x : 0) + ', ' + (spec.y != null ? spec.y : 0) +
+                    (spec.z != null && spec.z !== '' ? ', ' + spec.z : '') + ')';
+        }
+        if (exprStr && G.addPointStr) {
+          try { o = G.addPointStr(remapParamLetters(exprStr), spec.name ? String(spec.name).slice(0, 10) : null, true); }
+          catch (e) { o = null; }
+        }
+        if (!o) {   /* 数值点（或含参解析失败回退） */
+          o = G.mkp(null, num(spec.x), num(spec.y), num(spec.z));
+          if (spec.name) o.name = String(spec.name).slice(0, 10);
+        }
+        if (o && o.name) byName[o.name] = o;
       } else if (spec.type === 'segment' || spec.type === 'line') {
         var a = byName[spec.a], b = byName[spec.b];
         if (!a || !b) return null;
@@ -9421,17 +9462,25 @@ console.log('[GeoStudio] 落地页交互已就绪');
         o = { type: 'circle', mode: mode, name: '⊙' + c.name, cid: c.id, r: Math.max(0.2, num(spec.r) || 1.5), fill: true };
         G.Scene.add(o);
       } else if (spec.type === 'vector') {
-        /* 向量（from → to，画带箭头的向量） */
-        var vf = byName[spec.from], vt = byName[spec.to];
-        if (!vf || !vt) return null;
-        o = {
-          type: 'vector', mode: mode,
-          name: spec.name ? String(spec.name).slice(0, 12) : (vf.name + vt.name),
-          ox: vf.x, oy: vf.y, oz: vf.z || 0,
-          dx: vt.x - vf.x, dy: vt.y - vf.y, dz: (vt.z || 0) - (vf.z || 0),
-          params: []
-        };
-        G.Scene.add(o);
+        /* 自由向量（expr 表达式，可含参联动）或 from→to 两点向量 */
+        if (typeof spec.expr === 'string' && spec.expr.trim() && G.addVecStr) {
+          try {
+            G.addVecStr(remapParamLetters(spec.expr.trim()), true);
+            o = G.Scene.objs[G.Scene.objs.length - 1];
+            if (spec.name) o.name = String(spec.name).slice(0, 12);
+          } catch (e) { o = null; }
+        } else {
+          var vf = byName[spec.from], vt = byName[spec.to];
+          if (!vf || !vt) return null;
+          o = {
+            type: 'vector', mode: mode,
+            name: spec.name ? String(spec.name).slice(0, 12) : (vf.name + vt.name),
+            ox: vf.x, oy: vf.y, oz: vf.z || 0,
+            dx: vt.x - vf.x, dy: vt.y - vf.y, dz: (vt.z || 0) - (vf.z || 0),
+            params: []
+          };
+          G.Scene.add(o);
+        }
       } else if (spec.type === 'plane') {
         /* 三点定平面（立体） */
         var ppf = (spec.pts || []).map(function (n) { return byName[n]; }).filter(Boolean);
@@ -9480,11 +9529,11 @@ console.log('[GeoStudio] 落地页交互已就绪');
         if (!crs) return null;
         o = G.addCircleObj(crs.c, crs.r, null);
       } else if (spec.type === 'func') {
-        /* 函数 / 方程曲线（支持参数 a~k，工坊自动生成滑块） */
+        /* 函数 / 方程曲线（支持参数 a~k，工坊自动生成滑块；非白名单字母自动映射） */
         var expr = String(spec.expr || '').trim();
         if (!expr) return null;
         if (!G.ui || !G.ui.addFuncStr) return null;
-        try { G.ui.addFuncStr(expr); } catch (e) { return null; }
+        try { G.ui.addFuncStr(remapParamLetters(expr)); } catch (e) { return null; }
         o = G.Scene.objs[G.Scene.objs.length - 1];
       } else if (spec.type === 'solid') {
         var k = SOLID_KINDS[spec.kind] ? spec.kind : 'cuboid';
