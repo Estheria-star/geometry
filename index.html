@@ -7519,6 +7519,7 @@ function runAction(act) {
     if (sres.onSphere !== undefined && sres.total) st3.push({ text: '验证：' + sres.onSphere + ' / ' + sres.total + ' 个顶点在球面上' });
     if (sres.kindNote) st3.push({ text: sres.kindNote });
     st3.push({ text: '已生成「' + sphN.name + '」，可整体拖动 / 改色 / 删除；点两次撤销可还原', cls: 'ok' });
+    try { if (window.STAch) window.STAch.unlock('geo.sphere', '球心捕手', '🔮'); } catch (e) {}
     showResult({ title: nm3 + ' · ' + (so3.name || '几何体'), value: sres.r, steps: st3 });
     toast('已生成' + nm3 + '（r = ' + G.fmt(sres.r) + '）', 'ok');
   } else if (act === 'circum2d' || act === 'incircle2d') {
@@ -7815,6 +7816,7 @@ function runAction(act) {
     vrC.steps.unshift({ text: '面数：' + faceIdx.length + '，边数：' + ekeys.length + '（每条边恰好被 2 个面共享 ✓；顶点容差 ' + G.fmt(tol) + '）' });
     vrC.steps.push({ text: '已生成可整体移动 / 旋转 / 改色 / 删除的几何体（撤销可还原原面）' });
     showResult(vrC);
+    try { if (window.STAch) window.STAch.unlock('geo.custom_solid', '造物主', '🧩'); } catch (e) {}
     toast('已组合成 ' + solidC.name + '：可整体移动 / 改色 / 删除', 'ok');
   } else if (act === 'clearsel') {
     Scene.setSel([]);
@@ -9740,6 +9742,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
           function (i, total) { if (!aborted) status('正在建造图形…（' + i + '/' + total + '），点「取消建造」可中止', '', true); },
           function (n) {
             if (aborted) return;
+            try { if (window.STAch) window.STAch.unlock('geo.ai_build', 'AI 造物', '🤖'); } catch (e) {}
             var sec = ((Date.now() - t0) / 1000).toFixed(1);
             status('✨ 完成！已建造 ' + n + ' 个对象（' + sec + 's），解析卡可查看完整推导与答案', 'ok');
             setTimeout(statusFade, 6000);
@@ -9871,6 +9874,53 @@ console.log('[GeoStudio] 落地页交互已就绪');
 
   /* 诊断钩子（测试用） */
   G._ai = { parseJSON: parseJSON, build: buildScene, run: runAI };
+
+  /* ============================================================
+     🏆 跨站成就 SDK（startian.top 全站共享；cookie + localStorage 兜底）
+     ============================================================ */
+  var STAch = (function () {
+    var KEY = 'st_ach';
+    function readCookie() {
+      var m = document.cookie.match(/(?:^|;\s*)st_ach=([^;]*)/);
+      if (!m) return null;
+      try { return JSON.parse(decodeURIComponent(m[1])) || []; } catch (e) { return null; }
+    }
+    function writeCookie(list) {
+      try {
+        var v = encodeURIComponent(JSON.stringify(list));
+        if (v.length < 3800) document.cookie = 'st_ach=' + v + ';domain=.startian.top;path=/;max-age=31536000;SameSite=Lax';
+      } catch (e) {}
+    }
+    var list = readCookie();
+    if (!list) { try { list = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { list = []; } }
+    if (!Array.isArray(list)) list = [];
+    function save() {
+      try { localStorage.setItem(KEY, JSON.stringify(list)); } catch (e) {}
+      writeCookie(list);
+    }
+    function unlock(id, name, ico) {
+      if (list.indexOf(id) >= 0) return false;
+      list.push(id);
+      save();
+      try {
+        var el = document.createElement('div');
+        el.style.cssText = 'position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(16px);opacity:0;z-index:99999;background:rgba(22,26,48,.94);color:#fff;border:1px solid rgba(140,170,255,.42);border-radius:999px;padding:12px 22px;font:700 13.5px/1.4 system-ui,sans-serif;box-shadow:0 18px 44px rgba(0,0,0,.42);transition:opacity .4s ease,transform .4s cubic-bezier(.2,.85,.3,1.1);pointer-events:none;max-width:86vw';
+        el.textContent = '🏆 成就解锁：' + (ico ? ico + ' ' : '') + (name || id);
+        document.body.appendChild(el);
+        requestAnimationFrame(function () { el.style.opacity = '1'; el.style.transform = 'translateX(-50%)'; });
+        setTimeout(function () {
+          el.style.opacity = '0';
+          el.style.transform = 'translateX(-50%) translateY(16px)';
+          setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 500);
+        }, 3200);
+      } catch (e) {}
+      return true;
+    }
+    return { list: function () { return list.slice(); }, has: function (id) { return list.indexOf(id) >= 0; }, unlock: unlock };
+  })();
+  window.STAch = STAch;
+  setTimeout(function () { STAch.unlock('site.geometry', '几何学徒', '📐'); }, 800);
+
   console.log('[GeoStudio] AI 出图模块已就绪');
 })();
 
