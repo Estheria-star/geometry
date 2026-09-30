@@ -4638,7 +4638,7 @@ function buildSphere(r, nu, nv) {
     var phi = j * Math.PI / nv;
     for (i = 0; i < nu; i++) {
       var th = i * 2 * Math.PI / nu;
-      verts.push({ x: r * Math.sin(phi) * Math.cos(th), y: r * Math.sin(phi) * Math.sin(th), z: r * Math.cos(phi) + r });
+      verts.push({ x: r * Math.sin(phi) * Math.cos(th), y: r * Math.sin(phi) * Math.sin(th), z: r * Math.cos(phi) });
     }
   }
   function idx(i2, j2) { return j2 * nu + (i2 % nu); }
@@ -5904,7 +5904,7 @@ function pick3(sx, sy) {
       }
     } else if (o.type === 'solid') {
       if (o.kind === 'sphere') {
-        var c = proj({ x: o.cx || 0, y: o.cy || 0, z: (o.cz || 0) + o.dims.r });
+        var c = proj({ x: o.cx || 0, y: o.cy || 0, z: o.cz || 0 });   /* 球心（cx,cy,cz 即球心） */
         if (c) {
           var rpx = o.dims.r * FOCAL / c.depth;
           if (Math.hypot(sx - c.x, sy - c.y) < rpx) {
@@ -6521,10 +6521,11 @@ function polygonShape(c) {
 /* 立体几何体创建 */
 function createSolid(kind) {
   limitCheck('solid');
+  var dims = G.defaultDims(kind);
   var o = {
     type: 'solid', mode: 'solid', kind: kind,
     name: G.nameOf(G.SOLID_LABEL[kind] + ' ', kind),
-    dims: G.defaultDims(kind), cx: 0, cy: 0, cz: 0
+    dims: dims, cx: 0, cy: 0, cz: (kind === 'sphere') ? dims.r : 0   /* 球：cz 即球心，默认贴地摆放 */
   };
   Scene.add(o);
   toast('已创建' + G.SOLID_LABEL[kind] + '，选中后可调尺寸与体积', 'ok');
@@ -7063,7 +7064,7 @@ function objReadout(o, solid) {
       } else h += kv('提示', '三点共线', 'warn');
     }
   } else if (o.type === 'solid') {
-    h += coordEditor(o, ['cx', 'cy', 'cz'], ['位置 x', '位置 y', '高度 z']);
+    h += coordEditor(o, ['cx', 'cy', 'cz'], o.kind === 'sphere' ? ['球心 x', '球心 y', '球心 z'] : ['位置 x', '位置 y', '高度 z']);
     if (o.kind === 'custom' && o.mesh) {
       h += kv('组成', esc(o.mesh.verts.length + ' 个顶点 · ' + o.mesh.faces.length + ' 个面（组合立体）'), 'brand');
     } else {
@@ -9275,11 +9276,19 @@ console.log('[GeoStudio] 落地页交互已就绪');
     '9. {"type":"insphere","of":"圆锥"} 内切球（of 为几何体名）',
     '10. {"type":"circumcircle","of":["A","B","C"]} 外接圆（平面）',
     '11. {"type":"incircle","of":["A","B","C"]} 内切圆（平面三角形 / 正多边形）',
+    '12. {"type":"vector","from":"P","to":"A"} 向量（从 P 指向 A 的箭头，画向量关系必备）',
+    '13. {"type":"plane","pts":["A","B","C"]} 三点定平面（立体）',
+    '14. {"type":"ellipse","center":"O","a":2,"b":1.2} 椭圆（平面）',
     '',
     '【外接球 / 内切球问题的作图规则】',
     '- 先建出几何体（solid 指令要带 name，如 "name":"正方体"）或关键顶点（point），再调用 circumsphere / insphere / circumcircle / incircle 指令',
     '- 严禁手动摆一个尺寸相近的球或圆代替：一律用上述指令精算生成',
     '- 解析中给出球心位置与半径的推理（如长方体 R = √(a²+b²+c²)/2、正方体 R = √3a/2、正四面体 R = √6a/4）',
+    '',
+    '【抽象题 / 最值范围题的作图策略（重要）】',
+    '- 题目没有具体坐标时，自行构造一组合法的具体坐标把图形画出来：可用特殊值、对称摆放、单位化等，保证与题意的几何关系一致，并在解析里注明「以下按一组构造坐标作图，不影响结论」',
+    '- 向量条件先翻译成几何关系（如 PA·PC = 0 ⟺ PA ⊥ PC）再布置坐标；求最值的题要画出让目标量变化的关键结构（垂面、投影、临界位置）',
+    '- 即使无法唯一确定图形，也必须画出符合题意的完整示意图（关键点 / 线 / 面 / 向量俱全），不得只给文字不画图',
     '',
     '【示例】题目："正方体棱长 2，求体对角线长" 的输出（仅示范格式，实际请解用户给的题）：',
     '{"mode":"solid","objects":[{"type":"solid","kind":"cube","dims":{"a":2},"cx":0,"cy":0,"cz":0},{"type":"point","name":"A","x":1,"y":-1,"z":0},{"type":"point","name":"C1","x":-1,"y":1,"z":2},{"type":"segment","a":"A","b":"C1"}],"analysis":"设正方体棱长为 2。\\n面对角线 = √2·a = 2√2（勾股定理）。\\n体对角线 = √(a² + (√2a)²) = √3·a（再对体对角线用一次勾股定理）。\\n代入 a = 2 得 d = 2√3。","answer":"体对角线长 = 2√3"}'
@@ -9383,6 +9392,35 @@ console.log('[GeoStudio] 落地页交互已就绪');
         var c = byName[spec.center];
         if (!c) return null;
         o = { type: 'circle', mode: mode, name: '⊙' + c.name, cid: c.id, r: Math.max(0.2, num(spec.r) || 1.5), fill: true };
+        G.Scene.add(o);
+      } else if (spec.type === 'vector') {
+        /* 向量（from → to，画带箭头的向量） */
+        var vf = byName[spec.from], vt = byName[spec.to];
+        if (!vf || !vt) return null;
+        o = {
+          type: 'vector', mode: mode,
+          name: spec.name ? String(spec.name).slice(0, 12) : (vf.name + vt.name),
+          ox: vf.x, oy: vf.y, oz: vf.z || 0,
+          dx: vt.x - vf.x, dy: vt.y - vf.y, dz: (vt.z || 0) - (vf.z || 0),
+          params: []
+        };
+        G.Scene.add(o);
+      } else if (spec.type === 'plane') {
+        /* 三点定平面（立体） */
+        var ppf = (spec.pts || []).map(function (n) { return byName[n]; }).filter(Boolean);
+        if (ppf.length < 3) return null;
+        o = { type: 'plane3', mode: 'solid', name: G.nameOf('平面 ', 'plane'), pids: ppf.slice(0, 3).map(function (p) { return p.id; }) };
+        G.Scene.add(o);
+      } else if (spec.type === 'ellipse') {
+        /* 椭圆（平面，轴对齐：a 半长轴 x / b 半短轴 y） */
+        if (mode !== 'plane') return null;
+        var ec = byName[spec.center];
+        if (!ec) return null;
+        o = {
+          type: 'ellipse', mode: 'plane', name: G.nameOf('椭圆', 'ellip'),
+          cid: ec.id, a: Math.max(0.1, num(spec.a) || 2), b: Math.max(0.1, num(spec.b) || 1.2),
+          fill: !!spec.fill
+        };
         G.Scene.add(o);
       } else if (spec.type === 'circumsphere' || spec.type === 'insphere') {
         /* 外接球 / 内切球（of: 几何体名 或 点名数组） */
