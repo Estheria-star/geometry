@@ -2778,7 +2778,7 @@ var ctx = canvas.getContext('2d');
 var W = 800, H = 600, DPR = 1;
 
 /* 视图：世界中心 (cx,cy)，缩放 scale（CSS 像素 / 单位长度） */
-var view = G.view2 = { cx: 0, cy: 0, scale: 46, min: 0.8, max: 2200 };
+var view = G.view2 = { cx: 0, cy: 0, scale: 46, min: 0.002, max: 2200 };   /* min 放开：大边长图形也能缩到看全（0.002 ≈ 可视 50 万单位宽）；网格步长自适应，无性能影响 */
 
 function w2s(x, y) { return { x: W / 2 + (x - view.cx) * view.scale, y: H / 2 - (y - view.cy) * view.scale }; }
 function s2w(x, y) { return { x: view.cx + (x - W / 2) / view.scale, y: view.cy - (y - H / 2) / view.scale }; }
@@ -5850,7 +5850,7 @@ G.spinCam = function (dyaw, dpitch) {
 };
 /* 按比例缩放视距（f>1 放大；供涂鸦层双指手势等外部调用） */
 G.zoom3D = function (f) {
-  cam.dist = G.clamp(cam.dist / Math.max(0.05, f), 2.5, 130);
+  cam.dist = G.clamp(cam.dist / Math.max(0.05, f), 2.5, 2500);
   G.requestRender();
 };
 
@@ -6210,7 +6210,7 @@ G.pointer3D = function (type, e, p) {
       var two2 = Array.from(ptr3.values());
       if (two2.length >= 2) {
         var d = Math.hypot(two2[0].x - two2[1].x, two2[0].y - two2[1].y);
-        cam.dist = G.clamp(st3.dist0 * (st3.d0 / Math.max(20, d)), 2.5, 130);
+        cam.dist = G.clamp(st3.dist0 * (st3.d0 / Math.max(20, d)), 2.5, 2500);
       }
     }
     G.requestRender();
@@ -6249,7 +6249,7 @@ G.pointer3D = function (type, e, p) {
   }
 };
 G.wheel3D = function (e) {
-  cam.dist = G.clamp(cam.dist * Math.exp(e.deltaY * 0.0016), 2.5, 130);
+  cam.dist = G.clamp(cam.dist * Math.exp(e.deltaY * 0.0016), 2.5, 2500);
   G.requestRender();
 };
 
