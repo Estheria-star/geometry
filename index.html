@@ -1500,7 +1500,7 @@ body.pure .fold-tab{display:flex}
         <tr><td>预设导出 / 导入</td><td>「导出预设」存成 JSON 文件，<b>可自定义文件名</b>（如 二面角-正方体-日期），<b>涂鸦批注与解析卡一并保存</b>；「导入预设」会替换当前场景（有确认提醒，建议先导出备份当前内容）</td></tr>
         <tr><td>选择与多选</td><td><b>依次点选对象即可多选</b>（最多 99 个，无需按任何键），再点一次取消、点空白处清空；连选两个平面求二面角、选中两点连线、三点定平面（立体模式）</td></tr>
         <tr><td>导数与圆锥曲线</td><td>选中函数曲线可<b>求导 f′(x)</b>（可一键把导函数画到画布）、分析<b>极值与单调性</b>（可标注极值点）、作<b>切线</b>（指定 x 或选中曲线上的点）；隐式方程可做<b>圆锥曲线分析</b>，自动识别椭圆 / 双曲线 / 抛物线并给出中心、半轴、焦点、离心率、准线、渐近线等；直线与曲线选中后可求<b>弦长</b></td></tr>
-        <tr><td>🎤 语音输入</td><td>AI 出图面板里有「<b>语音输入</b>」按钮：点一下说出题目（如「已知正方体棱长二，求体对角线长」），识别结果自动填入输入框，<b>可直接编辑</b>；识别后的文本会自动做<b>数学口述转换</b>（艾克斯→x、的平方→^2、根号→√、三分之一→(1/3)、大于等于→≥、九十度→90° 等），并显示转换明细与<b>原始识别文本</b>，可一键<b>用原文</b>或<b>重试</b>。首次使用需在浏览器弹窗里<b>允许麦克风</b>；识别依赖浏览器厂商的语音服务（需联网），连不上、没听清或权限被拒时会给出对应提示，<b>手动打字始终不受影响</b></td></tr>
+        <tr><td>🎤 语音输入</td><td>AI 出图面板里有「<b>语音输入</b>」按钮：点一下说出题目（如「已知正方体棱长二，求体对角线长」）。<b>想说多久说多久</b>，识别跟着你的语速走，说完停顿约 4 秒自动结束（也可以随时点按钮立刻结束），单次最长 90 秒；面板上实时显示<b>已听秒数</b>。识别结果自动填入输入框，<b>可直接编辑</b>；会自动做<b>数学口述转换</b>（艾克斯→x、的平方→^2、根号→√、三分之一→(1/3)、大于等于→≥、九十度→90° 等），并显示转换明细与<b>原始识别文本</b>，可一键<b>用原文</b>或<b>重试</b>；输入框里已有你改过的内容时，新识别会<b>追加</b>而不是覆盖。首次使用需在浏览器弹窗里<b>允许麦克风</b>；识别依赖浏览器厂商的语音服务（需联网），连不上、没听清或权限被拒时会给出对应提示，<b>手动打字始终不受影响</b></td></tr>
         <tr><td>语音注意项</td><td>嘈杂环境下建议靠近麦克风、放慢语速；方言口音识别率取决于系统语音服务（本项目指定普通话 zh-CN，不能切换方言）；数学符号以<b>读法</b>为准（说「根号二」「三分之一」而不是「根号符号」）；本地文件（file://）方式打开时语音可能受限，建议用在线版</td></tr>
       </table>
       <h4>四、默认约束（明确设定）</h4>
@@ -10472,18 +10472,40 @@ console.log('[GeoStudio] 落地页交互已就绪');
     'language-not-supported': '当前浏览器不支持中文语音识别。'
   };
 
+  /* 会话节奏（说话时长自适应）：
+     silenceMs   有过识别活动后，静音这么久 → 视为「说完了」自动收尾
+     firstMs     还没有任何活动（还没开口）→ 最多等这么久
+     maxMs       单次会话总上限（超长题目的兜底，不打断说话）
+     startMs     语音服务启动无响应判定（file:// 等受限环境）
+     tickMs      心跳检测间隔 */
+  var TUNE = {
+    silenceMs: 4000,
+    firstMs: 20000,
+    maxMs: 90000,
+    startMs: 12000,
+    tickMs: 250
+  };
+
   var V = {
-    state: 'idle',              /* idle | listening | finalizing */
+    state: 'idle',              /* idle | starting | listening | finalizing */
     rec: null,
     supported: !!SR,
-    rawText: '',                /* 识别原文 */
+    rawText: '',                /* 识别原文（累积） */
     finalText: '',              /* 规范化后 */
+    interimText: '',            /* 最近一次实时字幕 */
     timeoutId: null,
+    startupCheckId: null,
+    tickId: null,
+    sessionStart: 0,            /* 本次会话开始时间 */
+    lastActivity: 0,            /* 最后一次识别活动（interim 或 final） */
+    hadActivity: false,
+    lastFilled: '',             /* 上次语音填入的输入框值（用于判断用户是否改过） */
     lastError: null,
     sawResult: false,
     warnedFile: false,
     els: {}
   };
+  V.TUNE = TUNE;
   G.voice = V;
 
   function $(id) { return document.getElementById(id); }
@@ -10495,22 +10517,26 @@ console.log('[GeoStudio] 落地页交互已就绪');
     el.className = 'ai-voice-note show' + (cls ? ' ' + cls : '');
     el.innerHTML = msg;
   }
-  function setLive(msg) {
+  function setLive(msg, sec) {
     var el = V.els.live;
     if (!el) return;
     if (!msg) { el.className = 'ai-voice-live'; el.innerHTML = ''; return; }
     el.className = 'ai-voice-live show';
-    el.innerHTML = '🎤 正在听：<span class="vv"></span>';
+    el.innerHTML = '🎤 正在听' + (sec != null ? ' <b>' + sec + 's</b>' : '') + '：<span class="vv"></span>';
     el.querySelector('.vv').textContent = msg;
   }
   function setBtn(state) {
     var b = V.els.btn;
     if (!b) return;
     b.classList.toggle('listening', state === 'listening');
-    b.classList.toggle('busy', state === 'finalizing');
+    b.classList.toggle('busy', state === 'starting' || state === 'finalizing');
     b.classList.toggle('disabled', state === 'unsupported');
     var t = b.querySelector('.vtxt');
-    if (t) t.textContent = state === 'listening' ? '正在听…点我停下' : state === 'finalizing' ? '识别中…' : state === 'unsupported' ? '浏览器不支持' : '语音输入';
+    if (t) t.textContent =
+      state === 'starting' ? '启动中…' :
+      state === 'listening' ? '正在听…点我停下' :
+      state === 'finalizing' ? '识别中…' :
+      state === 'unsupported' ? '浏览器不支持' : '语音输入';
   }
   function showExtra(showRetry, showUndo) {
     if (V.els.retry) V.els.retry.style.display = showRetry ? '' : 'none';
@@ -10520,6 +10546,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
   function cleanup() {
     if (V.timeoutId) { clearTimeout(V.timeoutId); V.timeoutId = null; }
     if (V.startupCheckId) { clearTimeout(V.startupCheckId); V.startupCheckId = null; }
+    if (V.tickId) { clearInterval(V.tickId); V.tickId = null; }
     if (V.rec) {
       try { V.rec.onresult = V.rec.onerror = V.rec.onend = V.rec.onstart = null; V.rec.abort(); } catch (e) {}
       V.rec = null;
@@ -10529,21 +10556,51 @@ console.log('[GeoStudio] 落地页交互已就绪');
     setLive('');
   }
 
+  /* 心跳：说话时长自适应的核心
+     - 说过话：静音 silenceMs 秒视为说完 → 自动收尾
+     - 还没开口：等 firstMs 仍无任何活动 → 收尾
+     - 总时长：maxMs 兜底（不打断正常说话，只防忘记点停） */
+  function tickCheck() {
+    if (V.state !== 'listening') return;
+    var now = Date.now();
+    /* 计时显示（每秒刷新一次，不闪） */
+    var sec = Math.floor((now - V.sessionStart) / 1000);
+    if (sec !== V._shownSec) {
+      V._shownSec = sec;
+      setLive(V.interimText || (V.hadActivity ? '（继续听你说…）' : '（请说题目…）'), sec);
+    }
+    if (V.hadActivity) {
+      if (now - V.lastActivity > TUNE.silenceMs) {
+        V.lastError = 'silence';
+        try { if (V.rec) V.rec.stop(); } catch (e) {}
+      }
+    } else if (now - V.sessionStart > TUNE.firstMs) {
+      V.lastError = 'no-input';
+      try { if (V.rec) V.rec.stop(); } catch (e) {}
+    }
+    if (now - V.sessionStart > TUNE.maxMs) {
+      V.lastError = 'maxlen';
+      try { if (V.rec) V.rec.stop(); } catch (e) {}
+    }
+  }
+  V._tickCheck = tickCheck;
+
   function start() {
     if (!V.supported) {
       setNote('当前浏览器不支持语音识别（Web Speech API）。建议使用最新版 Edge / Chrome，或直接手动输入。', 'err');
       return;
     }
-    if (V.state === 'listening') { stopByUser(); return; }
+    if (V.state === 'listening' || V.state === 'starting') { stopByUser(); return; }
     if (V.state === 'finalizing') return;
 
     /* 本地文件打开方式：实测 file:// 下语音服务常完全无响应，提前告知 */
     if (location.protocol === 'file:' && !V.warnedFile) {
       V.warnedFile = true;
-      setNote('提示：本地文件方式打开的页面，语音识别可能受限。正在尝试启动，若 5 秒内没有反应，请改用在线版 geometry.startian.top。', 'warn');
+      setNote('提示：本地文件方式打开的页面，语音识别可能受限。正在尝试启动，若 ' + Math.round(TUNE.startMs / 1000) + ' 秒内没有反应，请改用在线版 geometry.startian.top。', 'warn');
     }
 
-    V.rawText = ''; V.finalText = ''; V.sawResult = false; V.lastError = null;
+    V.rawText = ''; V.finalText = ''; V.interimText = ''; V.sawResult = false; V.lastError = null;
+    V.hadActivity = false; V.lastActivity = 0; V.sessionStart = Date.now(); V._shownSec = -1;
     showExtra(false, false);
     if (location.protocol !== 'file:') setNote('');
 
@@ -10554,15 +10611,21 @@ console.log('[GeoStudio] 落地页交互已就绪');
     }
     V.rec = rec;
     rec.lang = 'zh-CN';
-    rec.continuous = false;
+    rec.continuous = true;          /* 连续模式：说话多久听多久，自动停 */
     rec.interimResults = true;
     rec.maxAlternatives = 1;
+
+    V.state = 'starting';
+    setBtn('starting');
 
     rec.onstart = function () {
       if (V.startupCheckId) { clearTimeout(V.startupCheckId); V.startupCheckId = null; }
       V.state = 'listening';
+      V.sessionStart = Date.now();
       setBtn('listening');
-      setLive('（请说题目…）');
+      setLive('（请说题目…）', 0);
+      if (V.tickId) clearInterval(V.tickId);
+      V.tickId = setInterval(tickCheck, TUNE.tickMs);
     };
     rec.onresult = function (ev) {
       var interim = '', fin = '';
@@ -10571,36 +10634,39 @@ console.log('[GeoStudio] 落地页交互已就绪');
         if (r.isFinal) fin += r[0].transcript;
         else interim += r[0].transcript;
       }
-      if (interim) setLive(interim);
+      /* 任何结果（含 interim）都算「还在说话」的活动 */
+      V.lastActivity = Date.now();
+      V.hadActivity = true;
+      if (interim) {
+        V.interimText = interim;
+        setLive(interim, V._shownSec < 0 ? 0 : V._shownSec);
+      }
       if (fin) {
         V.sawResult = true;
         V.rawText += fin;
+        V.interimText = '';
       }
     };
     rec.onerror = function (ev) {
       V.lastError = ev.error || 'unknown';
       if (ev.error === 'aborted') return;    /* 主动取消，静默 */
-      if (ev.error === 'no-speech') {
-        cleanup();
-        setNote('没听见声音。靠近麦克风再说一次？也可以直接打字。', 'warn');
-        showExtra(true, false);
-        return;
-      }
-      cleanup();
+      /* no-speech：已收到的内容照样收尾（不丢字）；完全没听到时 finish 里给提示 */
+      if (ev.error === 'no-speech') { finish(); return; }
+      finish();
       var msg = ERR_MSG[ev.error] || ('识别出错（' + ev.error + '）。可以直接手动输入。');
-      setNote(msg, ev.error === 'no-speech' ? 'warn' : 'err');
+      setNote(msg, 'err');
       showExtra(true, false);
     };
     rec.onend = function () {
-      /* 自然结束 / 用户 stop / 超时 stop：三种都走 finish 收尾 */
-      if (V.state === 'listening' || V.state === 'finalizing') finish();
+      /* 自然结束 / 用户 stop / 心跳 stop：都走 finish 收尾 */
+      if (V.state === 'listening' || V.state === 'starting' || V.state === 'finalizing') finish();
     };
 
     try {
       rec.start();
-      /* 快速失败检测：5 秒连 onstart 都没有（file:// 等受限环境），立即给出明确提示 */
+      /* 启动无响应检测：慢启动实测可到 7 秒，给足 12 秒余量再判定 */
       V.startupCheckId = setTimeout(function () {
-        if (V.state === 'idle' && V.rec === rec) {
+        if (V.state === 'starting' && V.rec === rec) {
           var wasFile = location.protocol === 'file:';
           cleanup();
           setNote(wasFile
@@ -10608,14 +10674,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
             : '语音服务没有响应。可能是网络或系统语音服务问题，请稍后重试，或直接手动输入。', 'err');
           showExtra(true, false);
         }
-      }, 5000);
-      /* 超时保护：20 秒仍无任何结果则停止并提示 */
-      V.timeoutId = setTimeout(function () {
-        if (V.state === 'listening' && !V.sawResult) {
-          V.lastError = 'timeout';
-          try { rec.stop(); } catch (e) {}
-        }
-      }, 20000);
+      }, TUNE.startMs);
     } catch (e) {
       cleanup();
       setNote('无法启动语音识别：' + (e && e.message || e) + '。可以直接手动输入。', 'err');
@@ -10623,7 +10682,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
   }
 
   function stopByUser() {
-    if (V.rec && V.state === 'listening') {
+    if (V.rec && (V.state === 'listening' || V.state === 'starting')) {
       V.state = 'finalizing';
       setBtn('finalizing');
       setLive('');
@@ -10631,7 +10690,9 @@ console.log('[GeoStudio] 落地页交互已就绪');
     }
   }
 
-  /* 收尾：把识别结果规范化 → 填入输入框（幂等，事件先解绑防递归） */
+  /* 收尾：把识别结果规范化 → 填入输入框（幂等，事件先解绑防递归）
+     填入规则：输入框为空、或仍是上次语音填入的原文（没改过）→ 替换；
+               用户改过 / 已有手打内容 → 追加（不丢用户的东西） */
   function finish() {
     var rec = V.rec;
     V.rec = null;
@@ -10640,12 +10701,17 @@ console.log('[GeoStudio] 落地页交互已就绪');
       try { rec.abort(); } catch (e) {}
     }
     if (V.timeoutId) { clearTimeout(V.timeoutId); V.timeoutId = null; }
+    if (V.tickId) { clearInterval(V.tickId); V.tickId = null; }
 
+    var used = V.sessionStart ? Math.max(1, Math.round((Date.now() - V.sessionStart) / 1000)) : 0;
     var raw = (V.rawText || '').trim();
     if (!raw) {
       V.state = 'idle'; setBtn('idle'); setLive('');
-      if (V.lastError === 'timeout') setNote('等了 20 秒没听到内容，已停止。可以再点一次语音输入，或直接打字。', 'warn');
-      else if (!V.lastError) setNote('没听清内容。再点一次语音输入试试，或直接打字。', 'warn');
+      if (V.lastError === 'silence') setNote('没听清内容（可能声音太小或太远）。再点一次语音输入试试，或直接打字。', 'warn');
+      else if (V.lastError === 'no-input') setNote('等了一会儿没听到声音，已停止。可以再试一次，或直接打字。', 'warn');
+      else if (V.lastError === 'maxlen') setNote('单次语音最长为 ' + Math.round(TUNE.maxMs / 1000) + ' 秒，已自动收尾。可以分几次说，或直接打字。', 'warn');
+      else if (V.lastError === 'aborted') { /* 用户主动取消，静默 */ }
+      else setNote('没听清内容。再点一次语音输入试试，或直接打字。', 'warn');
       showExtra(true, false);
       return;
     }
@@ -10654,8 +10720,18 @@ console.log('[GeoStudio] 落地页交互已就绪');
     V.finalText = res.text;
 
     var inp = $('aiInput');
+    var appended = false;
     if (inp) {
-      inp.value = res.text;
+      var cur = inp.value;
+      var base = V.lastFilled || '';
+      if (cur && cur !== base) {
+        /* 用户改过 / 已有别的内容 → 追加，保留用户的东西 */
+        inp.value = cur.replace(/\s+$/, '') + '\n' + res.text;
+        appended = true;
+      } else {
+        inp.value = res.text;
+      }
+      V.lastFilled = inp.value;
       inp.dispatchEvent(new Event('input', { bubbles: true }));
     }
     V.state = 'idle';
@@ -10663,7 +10739,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
     setLive('');
 
     var conv = res.changes.length ? '<br><span class="conv">已自动转换：' + res.changes.join('、') + '</span>' : '';
-    setNote('✓ 已填入输入框，可以直接编辑。' +
+    setNote('✓ 已' + (appended ? '追加到' : '填入') + '输入框（识别 ' + used + ' 秒），可以直接编辑。' +
       (res.text !== raw ? '<br><span class="conv">识别原文：' + escapeHtml(raw) + '</span>' : '') + conv, 'ok');
     showExtra(true, res.text !== raw);
   }
@@ -10707,7 +10783,7 @@ console.log('[GeoStudio] 落地页交互已就绪');
 
   /* 测试钩子 */
   V._testFinish = finish;
-  V._setRaw = function (t) { V.rawText = t; V.sawResult = true; };
+  V._setRaw = function (t) { V.rawText = t; V.sawResult = true; V.hadActivity = !!t; V.lastActivity = Date.now(); };
   V._errMsg = ERR_MSG;
   V._ERR_TYPES = Object.keys(ERR_MSG);
   /* 公开接口（按钮点击用的同一份实现） */
