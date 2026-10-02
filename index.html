@@ -1133,7 +1133,7 @@ body.pure .fold-tab{display:flex}
               </div>
               <div class="sym-strip" id="sym-func"></div>
               <div class="chips" id="func-chips"></div>
-              <p class="hint" id="func-hint">支持 <code>y=f(x)</code>、<code>x=g(y)</code>、隐式方程 <code>F(x,y)=0</code>、极坐标 <code>r=f(θ)</code>、参数方程 <code>x=cos(t), y=sin(t)</code></p>
+              <p class="hint" id="func-hint">支持 <code>y=f(x)</code>、<code>x=g(y)</code>、隐式方程 <code>F(x,y)=0</code>、极坐标 <code>r=f(θ)</code>、参数方程 <code>x=cos(t), y=sin(t)</code>、虚数模式 <code>e^(i*t)</code></p>
             </div>
             <div class="panel-pane hidden" id="pane-pt">
               <div class="field-label"><span>点（平面 A(1, 2) / 空间 P(1, 2, 3)）</span></div>
@@ -1444,8 +1444,9 @@ body.pure .fold-tab{display:flex}
         <tr><td>其它函数</td><td class="mono">abs、min、max、sign、exp、round、atan2</td></tr>
         <tr><td>不等式</td><td class="mono">y &gt; x^2、x^2 + y^2 ≤ 4（画区域）；x^2 - a &gt; 0（求一元解集）；支持 &lt; &gt; ≤ ≥ ≠ 与 &lt;= &gt;= !=</td></tr>
         <tr><td>参数</td><td class="mono">a b c d f g h k 共 8 个，出现即生成滑块（e 已保留给自然常数）</td></tr>
-        <tr><td>省略乘号</td><td class="mono">2x、3sin(x)、πr、2√3、2|x| 都会自动补上乘号</td></tr>
-        <tr><td>输入示例</td><td class="mono">y = sin(x)；|x| + |y| = 1；x^2/4 + y^2/9 = 1；r = 2*cos(θ)；x = cos(t), y = sin(t)</td></tr>
+        <tr><td>🌀 虚数模式</td><td class="mono">含 <b>i</b> 的表达式自动进入复平面（实部作 x 轴、虚部作 y 轴）：<b>e^(i*t)</b> 画曲线（如欧拉公式的单位圆）；<b>e^(i*π)</b> 得复数点 −1；<b>e^(i*π) + 1 = 0</b> 验证恒等式。可用函数 sin cos tan sinh cosh tanh exp ln lg sqrt abs pow，参数 a~k 照常联动；t 范围默认可写 <b>t ∈ [0, 4π]</b> 自定义</td></tr>
+        <tr><td>省略乘号</td><td class="mono">2x、3sin(x)、πr、2√3、2|x| 都会自动补上乘号；2i、e^(iπ) 同样适用</td></tr>
+        <tr><td>输入示例</td><td class="mono">y = sin(x)；|x| + |y| = 1；x^2/4 + y^2/9 = 1；r = 2*cos(θ)；x = cos(t), y = sin(t)；z = e^(i*t)</td></tr>
         <tr><td>立体曲面</td><td class="mono">立体模式下含 x 与 y 的表达式如 z = sin(x)*cos(y) 自动切为曲面</td></tr>
       </table>
       <h4>三、图形与交互</h4>
@@ -1469,7 +1470,7 @@ body.pure .fold-tab{display:flex}
         <tr><td>数值精度</td><td>默认 3 位小数，可切 2 / 4 / 6 位；内部计算使用双精度</td></tr>
         <tr><td>可绘制范围</td><td>平面视图半宽 0.2 至 500 之间自由缩放，超出会被限制</td></tr>
         <tr><td>采样密度</td><td>显式函数逐像素采样；隐式方程为自适应网格（约每 6px 一格，上限 260×260，拖动时自动降密）；极坐标 1800 点；参数方程 2400 点</td></tr>
-        <tr><td>曲线参数范围</td><td>极坐标 θ ∈ [0, 2π]；参数方程 t ∈ [-2π, 2π]</td></tr>
+        <tr><td>曲线参数范围</td><td>极坐标 θ ∈ [0, 2π]；参数方程 t ∈ [-2π, 2π]；复数曲线 t ∈ [0, 2π]；均可用「, t ∈ [a, b]」自定义（如 <span class="mono">x = cos(t), y = sin(t), t ∈ [0, 4π]</span>）</td></tr>
         <tr><td>曲面网格</td><td>48×48（拖动中 32×32），仅立体模式支持</td></tr>
         <tr><td>交点范围</td><td>显式×显式、显式×隐式、直线×任意曲线；隐式×隐式暂不支持</td></tr>
         <tr><td>对象上限</td><td>曲线 12 条、点 60 个、图形 40 个、几何体 8 个（软上限，超出会提示）</td></tr>
@@ -1901,6 +1902,197 @@ G.compileExpr = function (src) {
   return o;
 };
 
+/* ============================================================
+   2.5 虚数模式（复数引擎）
+   复用同一套词法 / 语法分析，仅替换「编译到 JS」这一层：
+   每个节点产出 [实部, 虚部]，运行时库 CLX 提供复数运算
+   输入 e^(i*t) 画复平面曲线；e^(i*π) 得复数点；
+   e^(i*π)+1=0 验证恒等式
+   ============================================================ */
+var CLX_I = [0, 1];
+var CLX = {
+  add: function (a, b) { return [a[0] + b[0], a[1] + b[1]]; },
+  sub: function (a, b) { return [a[0] - b[0], a[1] - b[1]]; },
+  mul: function (a, b) { return [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]]; },
+  div: function (a, b) {
+    var d = b[0] * b[0] + b[1] * b[1];
+    if (d < 1e-300) return [NaN, NaN];
+    return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d];
+  },
+  exp: function (a) { var m = Math.exp(a[0]); return [m * Math.cos(a[1]), m * Math.sin(a[1])]; },
+  ln: function (a) { return [Math.log(Math.hypot(a[0], a[1])), Math.atan2(a[1], a[0])]; },
+  pow: function (a, b) {
+    /* 整数幂用快速幂（更精确）；一般情形走 e^(b·ln a) */
+    if (b[1] === 0 && Math.abs(b[0] - Math.round(b[0])) < 1e-12 && Math.abs(b[0]) <= 64) {
+      var n = Math.round(b[0]);
+      var base = (n < 0) ? CLX.div([1, 0], a) : a;
+      var e = Math.abs(n), r = [1, 0], p = base;
+      while (e > 0) { if (e & 1) r = CLX.mul(r, p); p = CLX.mul(p, p); e >>= 1; }
+      return r;
+    }
+    if (a[0] === 0 && a[1] === 0) return b[0] > 0 ? [0, 0] : [NaN, NaN];
+    return CLX.exp(CLX.mul(b, CLX.ln(a)));
+  },
+  sqrt: function (a) { return CLX.pow(a, [0.5, 0]); },
+  sin: function (a) { return [Math.sin(a[0]) * Math.cosh(a[1]), Math.cos(a[0]) * Math.sinh(a[1])]; },
+  cos: function (a) { return [Math.cos(a[0]) * Math.cosh(a[1]), -Math.sin(a[0]) * Math.sinh(a[1])]; },
+  tan: function (a) { return CLX.div(CLX.sin(a), CLX.cos(a)); },
+  sinh: function (a) { return [Math.sinh(a[0]) * Math.cos(a[1]), Math.cosh(a[0]) * Math.sin(a[1])]; },
+  cosh: function (a) { return [Math.cosh(a[0]) * Math.cos(a[1]), Math.sinh(a[0]) * Math.sin(a[1])]; },
+  abs: function (a) { return [Math.hypot(a[0], a[1]), 0]; }
+};
+/* 复数函数名 → 代码发生器 */
+var CFN = {
+  sin: function (a) { return '__C.sin(' + a[0] + ')'; },
+  cos: function (a) { return '__C.cos(' + a[0] + ')'; },
+  tan: function (a) { return '__C.tan(' + a[0] + ')'; },
+  sinh: function (a) { return '__C.sinh(' + a[0] + ')'; },
+  cosh: function (a) { return '__C.cosh(' + a[0] + ')'; },
+  tanh: function (a) { return '__C.div(__C.sinh(' + a[0] + '),__C.cosh(' + a[0] + '))'; },
+  exp: function (a) { return '__C.exp(' + a[0] + ')'; },
+  ln: function (a) { return '__C.ln(' + a[0] + ')'; },
+  lg: function (a) { return '__C.div(__C.ln(' + a[0] + '),[' + Math.LN10 + ',0])'; },
+  sqrt: function (a) { return '__C.sqrt(' + a[0] + ')'; },
+  cbrt: function (a) { return '__C.pow(' + a[0] + ',[1/3,0])'; },
+  abs: function (a) { return '__C.abs(' + a[0] + ')'; },
+  pow: function (a) { return '__C.pow(' + a[0] + ',' + a[1] + ')'; }
+};
+var C_BUILTIN = ['pi', 'π', 'e', 'E', '∞'];
+/* 复数编译：AST → 产出 [re, im] 的 JS 代码 */
+function emitC(node, info) {
+  switch (node.t) {
+    case 'num': return '[' + node.v + ',0]';
+    case 'var': {
+      var nm = node.name;
+      var low = nm.toLowerCase();
+      if (low === 'i') return 'CI';
+      if (nm === 't' || nm === 'θ' || low === 'theta') { info.vars['t'] = true; return '[t,0]'; }
+      if (C_BUILTIN.indexOf(nm) >= 0 || C_BUILTIN.indexOf(low) >= 0) {
+        return '[' + (BUILTIN[nm] !== undefined ? BUILTIN[nm] : BUILTIN[low]) + ',0]';
+      }
+      if (PARAM_NAMES.indexOf(nm) >= 0) { info.params[nm] = true; return '[P.' + nm + ',0]'; }
+      if (nm === 'x' || nm === 'y' || nm === 'z') {
+        throw new Error('虚数模式里没有「' + nm + '」：变量请用 t（如 e^(i*t)），实部虚部会自动成为 x、y 轴');
+      }
+      throw new Error('虚数模式：不支持的符号「' + nm + '」（变量请用 t，常数 i π e，参数 a~k）');
+    }
+    case 'op': {
+      if (node.op === '^') return '__C.pow(' + emitC(node.l, info) + ',' + emitC(node.r, info) + ')';
+      if (node.op === '+') return '__C.add(' + emitC(node.l, info) + ',' + emitC(node.r, info) + ')';
+      if (node.op === '-') return '__C.sub(' + emitC(node.l, info) + ',' + emitC(node.r, info) + ')';
+      if (node.op === '*') return '__C.mul(' + emitC(node.l, info) + ',' + emitC(node.r, info) + ')';
+      if (node.op === '/') return '__C.div(' + emitC(node.l, info) + ',' + emitC(node.r, info) + ')';
+      throw new Error('虚数模式：不支持运算符「' + node.op + '」');
+    }
+    case 'fn': {
+      var gen = CFN[node.name];
+      if (!gen) {
+        throw new Error('虚数模式暂不支持「' + node.name + '()」（可用：sin cos tan sinh cosh tanh exp ln lg sqrt abs pow）');
+      }
+      var args = node.args.map(function (x) { return emitC(x, info); });
+      return gen(args);
+    }
+  }
+  throw new Error('虚数表达式编译失败');
+}
+/* 编译复数表达式 → 可求值对象（eval(t, P) 返回 [实部, 虚部]） */
+G.compileComplexExpr = function (src) {
+  var toks = insertImplicitMul(tokenize(preprocess(src)));
+  var ast = parseTokens(toks);
+  var info = { vars: {}, params: {} };
+  var code = emitC(ast, info);
+  var fn = new Function('t', 'P', '__C', 'CI', 'return (' + code + ');');
+  return {
+    src: src, code: code,
+    vars: Object.keys(info.vars),
+    params: Object.keys(info.params),
+    eval: function (t, P) {
+      var z = fn(t || 0, P || {}, CLX, CLX_I);
+      if (!isFinite(z[0])) z[0] = NaN;
+      if (!isFinite(z[1])) z[1] = NaN;
+      return z;
+    }
+  };
+};
+/* 复数格式化：[-1, 1.2e-16] → '-1'；[0,1] → 'i'（近零截断） */
+G.fmtComplex = function (z, digits) {
+  var d = (digits == null) ? 6 : digits;
+  function n(v) { if (Math.abs(v) < 1e-10) return 0; return parseFloat(v.toFixed(d)); }
+  var re = n(z[0]), im = n(z[1]);
+  if (im === 0) return String(re);
+  var imPart = (Math.abs(im) === 1 ? '' : String(im)) + 'i';
+  if (re === 0) return (im === -1 ? '-' : '') + imPart;
+  return re + (im < 0 ? ' - ' : ' + ') + (Math.abs(im) === 1 ? '' : String(Math.abs(im))) + 'i';
+};
+/* 检测表达式是否含虚数单位 i（独立标识符） */
+function hasI(s) {
+  try {
+    var toks = tokenize(preprocess(s));
+    for (var i = 0; i < toks.length; i++) {
+      if (toks[i].type === 'ident' && toks[i].v.toLowerCase() === 'i') return true;
+    }
+  } catch (e) {}
+  return false;
+}
+/* 提取可选的 t 范围后缀：', t ∈ [a, b]'（参数方程 / 复数曲线通用）
+   返回 { src: 去掉后缀的式子, raw: 原后缀文本, t0, t1 } 或 null */
+function extractTRange(s) {
+  var m = s.match(/[,;，；]\s*t\s*(?:∈|in)\s*[\[\(]?\s*([^,，;；\]\)]+?)\s*[,，]\s*([^,，;；\]\)]+?)\s*[\]\)]?\s*$/i);
+  if (!m) return null;
+  var srcNoRange = s.slice(0, m.index).trim();
+  if (!srcNoRange) return null;
+  var c0, c1;
+  try { c0 = G.compileExpr(m[1]); c1 = G.compileExpr(m[2]); } catch (e) {
+    throw new Error('t 范围解析失败：' + e.message);
+  }
+  var CONST_OK = ['π', 'pi', 'e', 'E', '∞'];
+  var bad0 = c0.vars.filter(function (v) { return CONST_OK.indexOf(v) < 0; });
+  var bad1 = c1.vars.filter(function (v) { return CONST_OK.indexOf(v) < 0; });
+  if (bad0.length || bad1.length) throw new Error('t 范围必须是常数（如 t ∈ [0, 2π]）');
+  var t0 = c0.eval(0, 0, 0, 0, 0, {});
+  var t1 = c1.eval(0, 0, 0, 0, 0, {});
+  if (!isFinite(t0) || !isFinite(t1)) throw new Error('t 范围数值无效');
+  return { src: srcNoRange, raw: s.slice(m.index), t0: t0, t1: t1 };
+}
+/* 复数表达式解析：曲线（含 t）/ 点（无 t）/ 恒等式（关系等式） */
+function parseComplex(s, mode, tr) {
+  if (mode !== 'plane') throw new Error('虚数模式仅在平面几何可用，请先切到平面模式');
+  if (/[<>≤≥≠]|!=/.test(s)) throw new Error('复数不能比较大小（不支持 < > ≤ ≥ ≠）');
+  var rel = findTopRelation(s);
+  if (rel && rel.op !== '=') throw new Error('复数不能比较大小（不支持 < > ≤ ≥ ≠）');
+  /* 定义式：z = ... / w = ... */
+  var exprSrc = s, defName = null;
+  if (rel) {
+    var lc = rel.l.trim();
+    if (/^[a-zA-Z]$/.test(lc) && !hasI(lc)) { exprSrc = (rel.r || '').trim(); defName = lc; }
+    else if (!rel.l.trim()) throw new Error('等号左边不能为空');
+    else return parseComplexIdentity(rel.l, rel.r, s, mode);
+  }
+  if (!exprSrc) throw new Error('请输入复数表达式，例如 e^(i*t)');
+  var c = G.compileComplexExpr(exprSrc);
+  var t0 = tr ? tr.t0 : 0, t1 = tr ? tr.t1 : 2 * Math.PI;
+  if (c.vars.indexOf('t') >= 0) {
+    if (t1 <= t0) throw new Error('t 范围需要满足终点大于起点');
+    var disp = (defName ? defName + ' = ' : '') + exprSrc + (tr ? tr.raw : '');
+    return {
+      kind: 'complexCurve', tFn: c, t0: t0, t1: t1,
+      params: c.params, display: disp,
+      tip: 'z(t) 复平面曲线，t ∈ [' + G.fmt(t0, 3) + ', ' + G.fmt(t1, 3) + ']'
+    };
+  }
+  return { kind: 'complexPoint', cFn: c, params: c.params, display: s };
+}
+function parseComplexIdentity(lSrc, rSrc, display, mode) {
+  var cL = G.compileComplexExpr(lSrc.trim());
+  var cR = G.compileComplexExpr((rSrc || '').trim());
+  if (cL.vars.indexOf('t') >= 0 || cR.vars.indexOf('t') >= 0) {
+    throw new Error('恒等式两端不能含 t；画复平面曲线请写成 z = e^(i*t)');
+  }
+  return { kind: 'complexIdentity', cL: cL, cR: cR, params: uniq(cL.params.concat(cR.params)), display: display };
+}
+G.hasI = hasI;
+G.extractTRange = extractTRange;
+
 /* 顶层分割（忽略括号内），返回 [L, R] 或 [null, src] */
 function splitEq(s) {
   var depth = 0;
@@ -1963,6 +2155,13 @@ G.parseEquation = function (src, mode) {
   var s = String(src).trim().replace(/[；;]/g, ',').replace(/[（]/g, '(').replace(/[）]/g, ')');
   if (!s) throw new Error('请输入表达式');
 
+  /* 提取可选的 t 范围后缀（参数方程 / 复数曲线通用）：..., t ∈ [a, b] */
+  var tr = extractTRange(s);
+  if (tr) s = tr.src;
+
+  /* 虚数模式：含虚数单位 i 的表达式走复数分支（曲线 / 点 / 恒等式） */
+  if (hasI(s)) return parseComplex(s, mode, tr);
+
   /* 参数方程：两段，形如 x=cos(t), y=sin(t) */
   var segs = splitTop(s, [',']);
   if (segs.length === 2 && segs[0].indexOf('=') >= 0 && segs[1].indexOf('=') >= 0) {
@@ -1977,8 +2176,12 @@ G.parseEquation = function (src, mode) {
         if (v !== 't') throw new Error('参数方程只能包含变量 t，出现了「' + v + '」');
       });
       if (vars.indexOf('t') < 0) throw new Error('参数方程需要包含变量 t，例如 x=cos(t)');
-      return { kind: 'param', xFn: fx, yFn: fy, params: uniq(fx.params.concat(fy.params)), display: 'x=' + xSrc + ', y=' + ySrc,
-        tip: 't ∈ [-2π, 2π]' };
+      var pt0 = tr ? tr.t0 : -2 * Math.PI, pt1 = tr ? tr.t1 : 2 * Math.PI;
+      if (pt1 <= pt0) throw new Error('t 范围需要满足终点大于起点');
+      return { kind: 'param', xFn: fx, yFn: fy, params: uniq(fx.params.concat(fy.params)),
+        display: 'x=' + xSrc + ', y=' + ySrc + (tr ? tr.raw : ''),
+        t0: pt0, t1: pt1,
+        tip: 't ∈ [' + G.fmt(pt0, 3) + ', ' + G.fmt(pt1, 3) + ']' };
     }
     throw new Error('若要输入参数方程请写成 x=(...), y=(...) 的形式');
   }
@@ -2560,10 +2763,16 @@ G.recolorAll = function () {
   var p = PALETTE[G.theme()];
   G.Scene.objs.forEach(function (o) { if (o.colorIdx !== undefined) o.color = p[o.colorIdx % 8]; });
 };
-/* 含参点 / 向量：参数变化后用表达式重算坐标（拖动后自动解除绑定） */
+/* 含参点 / 向量：参数变化后用表达式重算坐标（拖动后自动解除绑定）
+   含参复数点（_cxpr）同样在此联动 */
 G.refreshParametric = function () {
   var P = G.paramMap();
   G.Scene.objs.forEach(function (o) {
+    if (o._cxpr) {
+      var z = o._cxpr.eval(0, P);
+      if (isFinite(z[0]) && isFinite(z[1]) && o.type === 'point') { o.x = z[0]; o.y = z[1]; }
+      return;
+    }
     if (!o._expr) return;
     var v = o._expr.map(function (c) { return c.eval(0, 0, 0, 0, 0, P); });
     if (!v.every(isFinite)) return;
@@ -3129,8 +3338,8 @@ function curveImplicit(o, P) {
 function curveParametric(o, P) {
   var N = G.quality === 'fast' ? 900 : 2000;
   var isPolar = (o.kind === 'polar');
-  var t0 = isPolar ? 0 : -2 * Math.PI;
-  var t1 = isPolar ? 2 * Math.PI : 2 * Math.PI;
+  var t0 = isPolar ? 0 : (o.t0 === undefined ? -2 * Math.PI : o.t0);
+  var t1 = isPolar ? 2 * Math.PI : (o.t1 === undefined ? 2 * Math.PI : o.t1);
   var prev = null, k;
   ctx.beginPath();
   for (k = 0; k <= N; k++) {
@@ -3153,6 +3362,27 @@ function curveParametric(o, P) {
   ctx.stroke();
 }
 
+/* 复数曲线：z(t) = 实部 + 虚部·i，实部作 x、虚部作 y，画在复平面 */
+function curveComplex(o, P) {
+  var N = G.quality === 'fast' ? 600 : 1500;
+  var t0 = (o.t0 === undefined) ? 0 : o.t0;
+  var t1 = (o.t1 === undefined) ? 2 * Math.PI : o.t1;
+  var prev = null, k;
+  ctx.beginPath();
+  for (k = 0; k <= N; k++) {
+    var t = t0 + (t1 - t0) * k / N;
+    var z = o.tFn.eval(t, P);
+    var x = z[0], y = z[1];
+    if (!isFinite(x) || !isFinite(y)) { prev = null; continue; }
+    var sp = w2s(x, y);
+    if (Math.abs(sp.x) > 3e5 || Math.abs(sp.y) > 3e5) { prev = null; continue; }
+    if (!prev) ctx.moveTo(sp.x, sp.y);
+    else ctx.lineTo(sp.x, sp.y);
+    prev = sp;
+  }
+  ctx.stroke();
+}
+
 function drawCurve(o, P) {
   ctx.save();
   ctx.strokeStyle = o.color;
@@ -3162,6 +3392,7 @@ function drawCurve(o, P) {
   if (o.kind === 'explicitY') curveExplicitY(o, P);
   else if (o.kind === 'explicitX') curveExplicitX(o, P);
   else if (o.kind === 'implicit') curveImplicit(o, P);
+  else if (o.kind === 'complexCurve') curveComplex(o, P);
   else curveParametric(o, P);
   ctx.restore();
 }
@@ -3587,7 +3818,8 @@ function paramOf(o, P) {
     if (o.kind === 'explicitY') return { f: function (t) { return { x: t, y: o.fn.eval(t, 0, 0, 0, 0, P) }; }, t0: b.x0, t1: b.x1 };
     if (o.kind === 'explicitX') return { f: function (t) { return { x: o.fn.eval(0, t, 0, 0, 0, P), y: t }; }, t0: b.y0, t1: b.y1 };
     if (o.kind === 'polar') return { f: function (th) { var r = o.fn.eval(0, 0, 0, 0, th, P); return { x: r * Math.cos(th), y: r * Math.sin(th) }; }, t0: 0, t1: 2 * Math.PI };
-    if (o.kind === 'param') return { f: function (t) { return { x: o.xFn.eval(0, 0, 0, t, 0, P), y: o.yFn.eval(0, 0, 0, t, 0, P) }; }, t0: -2 * Math.PI, t1: 2 * Math.PI };
+    if (o.kind === 'param') return { f: function (t) { return { x: o.xFn.eval(0, 0, 0, t, 0, P), y: o.yFn.eval(0, 0, 0, t, 0, P) }; }, t0: (o.t0 === undefined ? -2 * Math.PI : o.t0), t1: (o.t1 === undefined ? 2 * Math.PI : o.t1) };
+    if (o.kind === 'complexCurve') return { f: function (t) { var z = o.tFn.eval(t, P); return { x: z[0], y: z[1] }; }, t0: (o.t0 === undefined ? 0 : o.t0), t1: (o.t1 === undefined ? 2 * Math.PI : o.t1) };
   }
   if (o.type === 'segment' || o.type === 'line') {
     var pts = ptsOf(o);
@@ -4079,9 +4311,19 @@ canvas.addEventListener('pointerdown', function (e) {
 function canDragObject(o) {
   return ['point', 'vector', 'segment', 'line', 'poly', 'circle', 'ellipse', 'sector'].indexOf(o.type) >= 0;
 }
-/* 拖动含参对象时解除参数绑定（否则拖了会被参数弹回） */
+/* 拖动含参对象时解除参数绑定（否则拖了会被参数弹回）；复数点同理 */
 function unbindExpr(o) {
-  if (!o || !o._expr) return;
+  if (!o) return;
+  if (o._cxpr) {
+    o._cxpr = null;
+    if (!G._unbindNotice) {
+      G._unbindNotice = true;
+      setTimeout(function () { G._unbindNotice = false; }, 3200);
+      if (G.toast) G.toast('已解除参数绑定，该对象现在可以自由拖动', 'info');
+    }
+    return;
+  }
+  if (!o._expr) return;
   o._expr = null;
   if (!G._unbindNotice) {
     G._unbindNotice = true;
@@ -6352,7 +6594,7 @@ function setMode(m) {
     : '拖拽旋转 · 滚轮缩放 · 点选函数/几何体后拖动可移动（Ctrl 调高度）';
   $('input-func').placeholder = m === 'plane' ? 'y = a*sin(b*x)' : 'z = a*sin(x)*cos(y)';
   $('func-hint').innerHTML = m === 'plane'
-    ? '支持 <code>y=f(x)</code>、<code>x=g(y)</code>、隐式方程 <code>F(x,y)=0</code>、极坐标 <code>r=f(θ)</code>、参数方程 <code>x=cos(t), y=sin(t)</code>'
+    ? '支持 <code>y=f(x)</code>、<code>x=g(y)</code>、隐式方程 <code>F(x,y)=0</code>、极坐标 <code>r=f(θ)</code>、参数方程 <code>x=cos(t), y=sin(t)</code>、虚数模式 <code>e^(i*t)</code>'
     : '输入含 x 与 y 的表达式自动绘制曲面（z=0 平面上的曲线同样支持），例如 <code>z = a*sin(x)*cos(y)</code>';
   var tab3 = document.querySelector('#input-tabs button[data-pane="pane-shape"]');
   if (tab3) tab3.textContent = m === 'plane' ? '图形' : '几何体';
@@ -6398,15 +6640,72 @@ function addFuncStr(str, quiet) {
   limitCheck('curve');
   var parsed = G.parseEquation(str, Scene.mode);
   var o;
+  /* 虚数模式：复数点 / 恒等式验证 → 生成点对象 + 结果卡 */
+  if (parsed.kind === 'complexPoint' || parsed.kind === 'complexIdentity') {
+    return addComplexPoint(parsed, quiet);
+  }
   if (parsed.kind === 'surfaceZ') {
     o = { type: 'surface', mode: Scene.mode, name: G.nameOf('曲面', 'surf'), fn: parsed.fn, params: parsed.params, display: parsed.display };
     if (!parsed.fn.vars.length) throw new Error('曲面表达式需要包含 x 或 y');
   } else {
     o = { type: 'func', mode: Scene.mode, kind: parsed.kind, name: G.nameOf('f', 'func'), params: parsed.params, display: parsed.display };
-    ['fn', 'xFn', 'yFn', 'eval', 'tip', 'op', 'truth'].forEach(function (k) { if (parsed[k] !== undefined) o[k] = parsed[k]; });
+    ['fn', 'xFn', 'yFn', 'eval', 'tip', 'op', 'truth', 'tFn', 't0', 't1'].forEach(function (k) { if (parsed[k] !== undefined) o[k] = parsed[k]; });
+    if (parsed.kind === 'complexCurve') o.name = G.nameOf('z', 'func');
   }
   Scene.add(o);
   if (!quiet) toast('已添加 ' + parsed.display, 'ok');
+  return o;
+}
+/* 复数点 / 恒等式：计算值、生成点对象、弹结果卡；含参时随滑块联动 */
+function addComplexPoint(parsed, quiet) {
+  limitCheck('point');
+  parsed.params.forEach(function (pn) {
+    if (!Scene.params[pn]) Scene.params[pn] = { value: 1, min: -10, max: 10, step: 0.05 };
+  });
+  var P = G.paramMap();
+  var name = parsed.display.length > 16 ? parsed.display.slice(0, 15) + '…' : parsed.display;
+  var o;
+  if (parsed.kind === 'complexIdentity') {
+    var lv = parsed.cL.eval(0, P), rv = parsed.cR.eval(0, P);
+    var diff = Math.hypot(lv[0] - rv[0], lv[1] - rv[1]);
+    var ok = diff < 1e-6;
+    o = { type: 'point', mode: 'plane', name: name, x: lv[0], y: lv[1], z: 0, params: parsed.params };
+    Scene.add(o);
+    var Ls = G.fmtComplex(lv), Rs = G.fmtComplex(rv);
+    G.showResult({
+      title: '复数恒等式验证',
+      value: NaN,
+      steps: [
+        { text: '恒等式：' + parsed.display },
+        { text: '左边 = ' + Ls + '　（实部 ' + G.fmt(lv[0], 6) + '，虚部 ' + G.fmt(lv[1], 6) + '）' },
+        { text: '右边 = ' + Rs + '　（实部 ' + G.fmt(rv[0], 6) + '，虚部 ' + G.fmt(rv[1], 6) + '）' },
+        { text: ok ? '✓ 恒等式成立，两边之差为 ' + diff.toExponential(2) + '（浮点误差级）'
+                   : '✗ 两边不相等，差 = ' + G.fmtComplex([lv[0] - rv[0], lv[1] - rv[1]]), cls: ok ? 'ok' : 'warn' },
+        { text: '蓝点标出了左边的值在复平面上的位置', cls: 'dim' }
+      ]
+    });
+    if (!quiet) toast('✓ ' + (ok ? '恒等式成立' : '两边不相等'), ok ? 'ok' : 'warn');
+    return o;
+  }
+  /* complexPoint */
+  var v = parsed.cFn.eval(0, P);
+  if (!isFinite(v[0]) || !isFinite(v[1])) throw new Error('复数求值失败（可能超出数值范围）');
+  o = { type: 'point', mode: 'plane', name: name, x: v[0], y: v[1], z: 0, params: parsed.params };
+  if (parsed.params.length) o._cxpr = parsed.cFn;
+  Scene.add(o);
+  var mod = Math.hypot(v[0], v[1]);
+  var arg = Math.atan2(v[1], v[0]);
+  G.showResult({
+    title: '复数点',
+    value: NaN,
+    steps: [
+      { text: parsed.display + ' = ' + G.fmtComplex(v) },
+      { text: '实部 ' + G.fmt(v[0], 6) + '，虚部 ' + G.fmt(v[1], 6) },
+      { text: '模 |z| = ' + G.fmt(mod, 6) + '，辐角 arg z = ' + G.fmt(arg, 6) + ' rad（' + G.fmt(arg * 180 / Math.PI, 2) + '°）' },
+      { text: '已作为点画在复平面上（实部作 x 轴、虚部作 y 轴）', cls: 'dim' }
+    ]
+  });
+  if (!quiet) toast('已添加复数点 ' + G.fmtComplex(v), 'ok');
   return o;
 }
 function addPointStr(str, name, quiet) {
@@ -7909,7 +8208,17 @@ var SAMPLES = {
     { id: 'p-ineq', name: '不等式区域：y ≥ x² - a', build: function () { addFuncStr('y ≥ x^2 - a'); } },
     { id: 'p-ineq1', name: '一元不等式解集：x² - a > 0', build: function () { addFuncStr('x^2 - a > 0'); } },
     { id: 'p-vec', name: '向量关系实验室', build: function () { addVecStr('u = (a, b)'); addVecStr('v = (c, 2)'); } },
-    { id: 'p-liss', name: '参数方程：李萨如曲线', build: function () { addFuncStr('x = sin(3t), y = sin(4t)'); } }
+    { id: 'p-liss', name: '参数方程：李萨如曲线', build: function () { addFuncStr('x = sin(3t), y = sin(4t)'); } },
+    { id: 'p-euler', name: '🌀 欧拉公式：e^(iθ) 单位圆', build: function () {
+      addFuncStr('z = e^(i*t)', true);
+      addFuncStr('e^(i*π)', true);
+      G.view2.cx = 0; G.view2.cy = 0; G.view2.scale = Math.min(140, G.view2.scale * 3);
+      toast('欧拉公式：e^(iθ) = cos θ + i·sin θ，复平面上的单位圆', 'ok');
+    } },
+    { id: 'p-eulerid', name: '🌀 欧拉恒等式：e^(iπ) + 1 = 0', build: function () {
+      addFuncStr('e^(i*π) + 1 = 0');
+      G.view2.cx = 0; G.view2.cy = 0; G.view2.scale = Math.min(140, G.view2.scale * 3);
+    } }
   ],
   solid: [
     { id: 's-cube', name: '正方体与体对角线', build: function () {
@@ -8149,6 +8458,7 @@ function serializeScene() {
     } else if (o.type === 'point') {
       rec = { t: 'point', name: o.name, x: o.x, y: o.y, z: o.z || 0, mode: o.mode };
       if (o._expr) rec.expr = o._expr.map(function (c) { return c.src; });
+      if (o._cxpr) rec.cexpr = o._cxpr.src;
     } else if (o.type === 'vector') {
       rec = { t: 'vector', name: o.name, ox: o.ox, oy: o.oy, oz: o.oz || 0, dx: o.dx, dy: o.dy, dz: o.dz || 0, mode: o.mode };
       if (o._expr) rec.expr = o._expr.map(function (c) { return c.src; });
@@ -8198,12 +8508,13 @@ function deserializeScene(data) {
           o = { type: 'surface', mode: rec.mode || 'plane', name: rec.name, fn: parsed.fn, params: parsed.params, display: parsed.display };
         } else {
           o = { type: 'func', mode: rec.mode || 'plane', kind: parsed.kind, name: rec.name, params: parsed.params, display: parsed.display };
-          ['fn', 'xFn', 'yFn', 'eval', 'tip', 'op', 'truth'].forEach(function (k) { if (parsed[k] !== undefined) o[k] = parsed[k]; });
+          ['fn', 'xFn', 'yFn', 'eval', 'tip', 'op', 'truth', 'tFn', 't0', 't1'].forEach(function (k) { if (parsed[k] !== undefined) o[k] = parsed[k]; });
         }
         if (rec.t3) o.t3 = { tx: +rec.t3.tx || 0, ty: +rec.t3.ty || 0, tz: +rec.t3.tz || 0, rx: +rec.t3.rx || 0, ry: +rec.t3.ry || 0, rz: +rec.t3.rz || 0 };
       } else if (rec.t === 'point') {
         o = { type: 'point', mode: rec.mode, name: rec.name, x: rec.x, y: rec.y, z: rec.z || 0, params: [] };
         if (rec.expr && rec.expr.length) o._expr = rec.expr.map(function (s) { return G.compileExpr(s); });
+        if (rec.cexpr) { var cc = G.compileComplexExpr(rec.cexpr); o._cxpr = cc; o.params = cc.params; }
       } else if (rec.t === 'vector') {
         o = { type: 'vector', mode: rec.mode, name: rec.name, ox: rec.ox, oy: rec.oy, oz: rec.oz || 0, dx: rec.dx, dy: rec.dy, dz: rec.dz || 0, params: [] };
         if (rec.expr && rec.expr.length) o._expr = rec.expr.map(function (s) { return G.compileExpr(s); });
