@@ -861,6 +861,40 @@ body.pure .fold-tab{display:flex}
 .ai-deep{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px;color:var(--t3);cursor:pointer;user-select:none;line-height:1.5}
 .ai-deep input{accent-color:#6366f1;cursor:pointer;margin:0;flex:0 0 auto}
 .ai-deep input:checked + span{color:var(--brand-2,#06b6d4);font-weight:700}
+
+/* ===== 语音输入（AI 面板） ===== */
+.ai-voice-row{display:flex;gap:6px;margin-top:8px;align-items:center}
+.ai-voice-btn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12px;font-weight:700;background:var(--glass-2);color:var(--t1);cursor:pointer;font-family:inherit;transition:border-color .2s ease,background .2s ease,color .2s ease;position:relative;overflow:hidden}
+.ai-voice-btn:hover{border-color:var(--brand)}
+.ai-voice-btn .ic{width:14px;height:14px;flex:0 0 auto}
+.ai-voice-btn .ic-stop{display:none}
+.ai-voice-btn .veq{display:none;align-items:flex-end;gap:2px;height:12px}
+.ai-voice-btn .veq i{width:2.5px;background:currentColor;border-radius:2px;animation:voiceEq .9s ease-in-out infinite}
+.ai-voice-btn .veq i:nth-child(1){height:5px;animation-delay:0s}
+.ai-voice-btn .veq i:nth-child(2){height:11px;animation-delay:.15s}
+.ai-voice-btn .veq i:nth-child(3){height:7px;animation-delay:.3s}
+.ai-voice-btn .veq i:nth-child(4){height:9px;animation-delay:.45s}
+@keyframes voiceEq{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(1.15)}}
+.ai-voice-btn.listening{border-color:#ef4444;background:rgba(239,68,68,.12);color:#ef4444}
+.ai-voice-btn.listening .ic-mic{display:none}
+.ai-voice-btn.listening .ic-stop{display:block}
+.ai-voice-btn.listening .veq{display:inline-flex}
+.ai-voice-btn.busy{opacity:.75;cursor:progress}
+.ai-voice-btn.disabled{opacity:.45;cursor:not-allowed}
+.ai-voice-retry,.ai-voice-undo{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:10px;padding:8px 11px;font-size:11.5px;font-weight:700;background:transparent;color:var(--t2);cursor:pointer;font-family:inherit;white-space:nowrap;transition:border-color .2s ease,color .2s ease}
+.ai-voice-retry:hover,.ai-voice-undo:hover{border-color:var(--brand);color:var(--t1)}
+.ai-voice-retry .ic{width:12px;height:12px}
+.ai-voice-live{font-size:11.5px;color:var(--t3);margin-top:7px;line-height:1.6;min-height:0;font-style:italic;display:none;word-break:break-all}
+.ai-voice-live.show{display:block}
+.ai-voice-live .vv{color:var(--brand,#89C2FF);font-style:normal}
+.ai-voice-note{font-size:11px;margin-top:6px;line-height:1.65;display:none;word-break:break-all}
+.ai-voice-note.show{display:block}
+.ai-voice-note.ok{color:#22c55e}
+.ai-voice-note.warn{color:#f59e0b}
+.ai-voice-note.err{color:#ef4444}
+.ai-voice-note .conv{color:var(--t3)}
+.ai-voice-note b{font-weight:800}
+@media (max-width:640px){ .ai-voice-btn .vtxt{font-size:11.5px} }
 /* 解析卡步骤高亮（ok=答案行） */
 .result-card .step.ok{color:#22c55e;font-weight:700}
 .result-card .step.warn{color:#f59e0b}
@@ -919,6 +953,9 @@ body.pure .fold-tab{display:flex}
     <symbol id="i-arrow-r" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></symbol>
     <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.64-6.36"/><path d="M3 4v5h5"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.06 12.35a1 1 0 0 1 0-.7C3.7 7.6 7.6 5 12 5s8.3 2.6 9.94 6.65a1 1 0 0 1 0 .7C20.3 16.4 16.4 19 12 19s-8.3-2.6-9.94-6.65Z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.73 5.08A10.4 10.4 0 0 1 12 5c4.4 0 8.3 2.6 9.94 6.65a1 1 0 0 1 0 .7 13.2 13.2 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.5 13.5 0 0 0 2.06 11.65a1 1 0 0 0 0 .7C3.7 16.4 7.6 19 12 19a9.7 9.7 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/><path d="M9.9 9.9a3 3 0 1 0 4.2 4.2"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/></symbol>
@@ -1463,6 +1500,8 @@ body.pure .fold-tab{display:flex}
         <tr><td>预设导出 / 导入</td><td>「导出预设」存成 JSON 文件，<b>可自定义文件名</b>（如 二面角-正方体-日期），<b>涂鸦批注与解析卡一并保存</b>；「导入预设」会替换当前场景（有确认提醒，建议先导出备份当前内容）</td></tr>
         <tr><td>选择与多选</td><td><b>依次点选对象即可多选</b>（最多 99 个，无需按任何键），再点一次取消、点空白处清空；连选两个平面求二面角、选中两点连线、三点定平面（立体模式）</td></tr>
         <tr><td>导数与圆锥曲线</td><td>选中函数曲线可<b>求导 f′(x)</b>（可一键把导函数画到画布）、分析<b>极值与单调性</b>（可标注极值点）、作<b>切线</b>（指定 x 或选中曲线上的点）；隐式方程可做<b>圆锥曲线分析</b>，自动识别椭圆 / 双曲线 / 抛物线并给出中心、半轴、焦点、离心率、准线、渐近线等；直线与曲线选中后可求<b>弦长</b></td></tr>
+        <tr><td>🎤 语音输入</td><td>AI 出图面板里有「<b>语音输入</b>」按钮：点一下说出题目（如「已知正方体棱长二，求体对角线长」），识别结果自动填入输入框，<b>可直接编辑</b>；识别后的文本会自动做<b>数学口述转换</b>（艾克斯→x、的平方→^2、根号→√、三分之一→(1/3)、大于等于→≥、九十度→90° 等），并显示转换明细与<b>原始识别文本</b>，可一键<b>用原文</b>或<b>重试</b>。首次使用需在浏览器弹窗里<b>允许麦克风</b>；识别依赖浏览器厂商的语音服务（需联网），连不上、没听清或权限被拒时会给出对应提示，<b>手动打字始终不受影响</b></td></tr>
+        <tr><td>语音注意项</td><td>嘈杂环境下建议靠近麦克风、放慢语速；方言口音识别率取决于系统语音服务（本项目指定普通话 zh-CN，不能切换方言）；数学符号以<b>读法</b>为准（说「根号二」「三分之一」而不是「根号符号」）；本地文件（file://）方式打开时语音可能受限，建议用在线版</td></tr>
       </table>
       <h4>四、默认约束（明确设定）</h4>
       <table>
@@ -1495,6 +1534,20 @@ body.pure .fold-tab{display:flex}
     <div class="ai-input-line">
       <textarea id="aiInput" rows="2" placeholder="输入题目，AI 自动建图并给解析，如：正方体棱长 2，求体对角线长" spellcheck="false"></textarea>
     </div>
+    <div class="ai-voice-row">
+      <button class="ai-voice-btn" id="aiVoiceBtn" type="button" title="语音输入：说出题目，自动转成文字填进输入框">
+        <svg class="ic ic-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-mic"/></svg>
+        <svg class="ic ic-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-stop"/></svg>
+        <span class="vtxt">语音输入</span>
+        <span class="veq" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      </button>
+      <button class="ai-voice-retry" id="aiVoiceRetry" type="button" title="重新说一遍" style="display:none">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-retry"/></svg><span>重试</span>
+      </button>
+      <button class="ai-voice-undo" id="aiVoiceUndo" type="button" title="改用识别原文（不经过数学转换）" style="display:none"><span>用原文</span></button>
+    </div>
+    <div class="ai-voice-live" id="aiVoiceLive" role="status" aria-live="polite"></div>
+    <div class="ai-voice-note" id="aiVoiceNote"></div>
     <div class="ai-actions">
       <button class="btn btn-primary ai-go" id="aiGo" type="button">
         <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#i-spark"/></svg><span>AI 分析并建造</span>
@@ -10257,6 +10310,410 @@ console.log('[GeoStudio] 落地页交互已就绪');
   setTimeout(function () { STAch.unlock('site.geometry', '几何学徒', '📐'); }, 800);
 
   console.log('[GeoStudio] AI 出图模块已就绪');
+})();
+/* ============================================================
+   js7_voice：AI 出题 · 语音输入
+   一、数学口述规范化器（纯函数，把语音识别文本转成更接近数学写法的文本）
+   二、语音识别控制器（Web Speech API：权限 / 超时 / 错误分类 / 降级）
+   三、UI 绑定（麦克风按钮 / 实时字幕 / 重试 / 用原文）
+   设计原则：保守转换（宁可保留原文也不转错），全部转换可撤销
+   ============================================================ */
+(function () {
+  'use strict';
+  var G = window.__Geo;
+
+  /* ============================================================
+     一、数学口述规范化器
+     ============================================================ */
+  var CN_DIGIT = { '零': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+  var NUM_CHARS = '[零一二三四五六七八九十百千]';
+
+  /* 中文数字串 → 数值（支持 十二 / 二十三 / 一百二十三 / 零） */
+  function cnToNum(m) {
+    var total = 0, num = 0;
+    for (var i = 0; i < m.length; i++) {
+      var c = m[i];
+      if (CN_DIGIT[c] !== undefined) num = CN_DIGIT[c];
+      else if (c === '十') { total += (num === 0 ? 1 : num) * 10; num = 0; }
+      else if (c === '百') { total += (num === 0 ? 1 : num) * 100; num = 0; }
+      else if (c === '千') { total += (num === 0 ? 1 : num) * 1000; num = 0; }
+    }
+    return total + num;
+  }
+  /* 任意数字片段（中文或阿拉伯）→ 数值 */
+  function anyNum(s) {
+    if (/^[0-9]+$/.test(s)) return parseInt(s, 10);
+    return cnToNum(s);
+  }
+
+  /* 术语保护：数字后面紧跟这些字时不转换（三角形 / 二次 / 三视图 / 三棱柱 …） */
+  var TERM_TAIL = /[角边面棱次维项元视垂形体柱锥球线函象]|视图/;
+  /* 概数保护：前面是这些字时不转换（几十 / 数十年 / 多个） */
+  var APPROX_HEAD = /[几数多]/;
+
+  function convertNumbers(s) {
+    return s.replace(new RegExp(NUM_CHARS + '+', 'g'), function (m, off, full) {
+      var before = off > 0 ? full[off - 1] : '';
+      var after = off + m.length < full.length ? full[off + m.length] : '';
+      if (TERM_TAIL.test(after)) return m;          /* 三角形 / 二次… */
+      if (APPROX_HEAD.test(before)) return m;       /* 几十 / 数十年… */
+      var n = cnToNum(m);
+      return String(n);
+    });
+  }
+
+  /* 转换日志收集器 */
+  function makeLogger() {
+    var items = [];
+    return {
+      items: items,
+      add: function (label) { if (items.indexOf(label) < 0) items.push(label); }
+    };
+  }
+  function rep(log, s, re, to, label) {
+    if (typeof to === 'function') {
+      return s.replace(re, function () {
+        if (label) log.add(label);
+        return to.apply(null, arguments);
+      });
+    }
+    /* 字符串模式：直接交给 replace（保证 $1 占位符正常展开），比较前后差异记日志 */
+    var after = s.replace(re, to);
+    if (label && after !== s) log.add(label);
+    return after;
+  }
+
+  /* 主函数：规范化（返回 { text, changes[] }） */
+  function normalizeSpeech(input) {
+    var log = makeLogger();
+    var s = String(input || '').replace(/\s+/g, ' ').trim();
+    if (!s) return { text: '', changes: [] };
+
+    /* 1) 希腊字母与常见谐音 */
+    s = rep(log, s, /阿尔法|阿尔发/g, 'α', '阿尔法→α');
+    s = rep(log, s, /贝塔|贝它|北塔/g, 'β', '贝塔→β');
+    s = rep(log, s, /伽马|伽玛|嘎马/g, 'γ', '伽马→γ');
+    s = rep(log, s, /德尔塔|得尔塔|戴尔塔/g, 'δ', '德尔塔→δ');
+    s = rep(log, s, /艾普西龙|艾普西隆/g, 'ε', '艾普西龙→ε');
+    s = rep(log, s, /兰姆达|拉姆达|兰布达/g, 'λ', '拉姆达→λ');
+    s = rep(log, s, /西格玛|西格马/g, 'σ', '西格玛→σ');
+    s = rep(log, s, /欧米伽|欧米加|欧米嘎/g, 'ω', '欧米伽→ω');
+    s = rep(log, s, /西塔|斯塔|希塔/g, 'θ', '西塔→θ');
+    s = rep(log, s, /圆周率/g, 'π', '圆周率→π');
+    s = rep(log, s, /艾克斯/g, 'x', '艾克斯→x');
+
+    /* 2) 分数（百分之优先，再 X分之Y） */
+    s = rep(log, s, new RegExp('百分之\\s*(' + NUM_CHARS + '+|[0-9]+)'), function (m, a) {
+      return anyNum(a) + '%';
+    }, '百分之→%');
+    s = rep(log, s, new RegExp('(' + NUM_CHARS + '+|[0-9]+)\\s*分之\\s*(' + NUM_CHARS + '+|[0-9]+)', 'g'), function (m, a, b) {
+      return '(' + anyNum(b) + '/' + anyNum(a) + ')';
+    }, 'X分之Y→(Y/X)');
+
+    /* 3) 幂：平方 / 立方 / N 次方 */
+    s = rep(log, s, /的\s*平方/g, '^2', '的平方→^2');
+    s = rep(log, s, /的\s*立方/g, '^3', '的立方→^3');
+    s = rep(log, s, /的\s*二次方/g, '^2', '的二次方→^2');
+    s = rep(log, s, /的\s*三次方/g, '^3', '的三次方→^3');
+    s = rep(log, s, /的\s*四次方/g, '^4', '的四次方→^4');
+    s = rep(log, s, new RegExp('的\\s*(' + NUM_CHARS + '|[0-9]+)\\s*次方', 'g'), function (m, n) {
+      return '^' + anyNum(n);
+    }, '的N次方→^N');
+    s = rep(log, s, /的\s*([0-9a-zA-Z]+)\s*次方/g, '^$1', '的N次方→^N');
+
+    /* 4) 根号 */
+    s = rep(log, s, /根号下|根号|开平方|开根/g, '√', '根号→√');
+
+    /* 5) 数字（最后统一转，前面已把术语结构处理完） */
+    var beforeN = s;
+    s = convertNumbers(s);
+    if (s !== beforeN) log.add('中文数字→阿拉伯数字');
+    /* 小数点："三点五" 已在上一行转成 3点5 */
+    s = rep(log, s, /([0-9]+)\s*点\s*([0-9]+)/g, '$1.$2', '小数点');
+    /* 负号 */
+    s = rep(log, s, /负\s*([0-9])/g, '-$1', '负→-');
+
+    /* 6) 度 */
+    s = rep(log, s, /([0-9]+)\s*度(?![数])/g, '$1°', '度→°');
+
+    /* 7) 运算符（长词优先；加/减需要上下文判断，避免"增加/减少"误伤） */
+    var M = '[0-9a-zA-Z\\)）π°αβγδθλμσω√]';
+    var Ml = '[0-9a-zA-Z\\(（π√αβγδθλμσω]';
+    s = rep(log, s, /大于等于/g, '≥', '大于等于→≥');
+    s = rep(log, s, /小于等于/g, '≤', '小于等于→≤');
+    s = rep(log, s, /不等于/g, '≠', '不等于→≠');
+    s = rep(log, s, /大于/g, '>', '大于→>');
+    s = rep(log, s, /小于/g, '<', '小于→<');
+    s = rep(log, s, /等于/g, '=', '等于→=');
+    s = rep(log, s, /乘以|乗以/g, '*', '乘以→*');
+    s = rep(log, s, /除以/g, '/', '除以→/');
+    s = rep(log, s, new RegExp('(' + M + ')\\s*(加上|加)\\s*(' + Ml + ')', 'g'), '$1+$3', '加→+');
+    s = rep(log, s, new RegExp('(' + M + ')\\s*(减去|减)\\s*(' + Ml + ')', 'g'), '$1-$3', '减→-');
+    s = rep(log, s, new RegExp('(' + M + ')\\s*(乘以|乘)\\s*(' + Ml + ')', 'g'), '$1*$3', '乘→*');
+
+    /* 8) 规整 */
+    s = s.replace(/\s*([+\-*/=≥≤≠<>])\s*/g, '$1').replace(/\s{2,}/g, ' ').trim();
+
+    return { text: s, changes: log.items };
+  }
+  G.normalizeSpeech = normalizeSpeech;
+
+  /* ============================================================
+     二、语音识别控制器
+     ============================================================ */
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var ERR_MSG = {
+    'not-allowed': '麦克风权限被拒绝。点浏览器地址栏左侧的锁形图标 → 站点权限 → 把「麦克风」改为「允许」，再点一次语音输入。也可以直接手动打字，功能不受影响。',
+    'service-not-allowed': '浏览器拒绝了语音服务（站点权限或平台策略）。请在浏览器设置里允许麦克风，或直接手动输入。',
+    'network': '语音识别服务连不上（网络波动，或本地文件方式打开受限）。可直接手动输入；若常用此功能，建议用在线版 geometry.startian.top。',
+    'audio-capture': '没有检测到可用的麦克风。请检查耳麦连接，以及系统「设置 → 声音 → 输入」里的默认设备。',
+    'no-speech': '没听见声音。靠近麦克风再说一次？也可以直接打字。',
+    'aborted': '已取消语音输入。',
+    'language-not-supported': '当前浏览器不支持中文语音识别。'
+  };
+
+  var V = {
+    state: 'idle',              /* idle | listening | finalizing */
+    rec: null,
+    supported: !!SR,
+    rawText: '',                /* 识别原文 */
+    finalText: '',              /* 规范化后 */
+    timeoutId: null,
+    lastError: null,
+    sawResult: false,
+    warnedFile: false,
+    els: {}
+  };
+  G.voice = V;
+
+  function $(id) { return document.getElementById(id); }
+
+  function setNote(msg, cls) {
+    var el = V.els.note;
+    if (!el) return;
+    if (!msg) { el.className = 'ai-voice-note'; el.innerHTML = ''; return; }
+    el.className = 'ai-voice-note show' + (cls ? ' ' + cls : '');
+    el.innerHTML = msg;
+  }
+  function setLive(msg) {
+    var el = V.els.live;
+    if (!el) return;
+    if (!msg) { el.className = 'ai-voice-live'; el.innerHTML = ''; return; }
+    el.className = 'ai-voice-live show';
+    el.innerHTML = '🎤 正在听：<span class="vv"></span>';
+    el.querySelector('.vv').textContent = msg;
+  }
+  function setBtn(state) {
+    var b = V.els.btn;
+    if (!b) return;
+    b.classList.toggle('listening', state === 'listening');
+    b.classList.toggle('busy', state === 'finalizing');
+    b.classList.toggle('disabled', state === 'unsupported');
+    var t = b.querySelector('.vtxt');
+    if (t) t.textContent = state === 'listening' ? '正在听…点我停下' : state === 'finalizing' ? '识别中…' : state === 'unsupported' ? '浏览器不支持' : '语音输入';
+  }
+  function showExtra(showRetry, showUndo) {
+    if (V.els.retry) V.els.retry.style.display = showRetry ? '' : 'none';
+    if (V.els.undo) V.els.undo.style.display = showUndo ? '' : 'none';
+  }
+
+  function cleanup() {
+    if (V.timeoutId) { clearTimeout(V.timeoutId); V.timeoutId = null; }
+    if (V.startupCheckId) { clearTimeout(V.startupCheckId); V.startupCheckId = null; }
+    if (V.rec) {
+      try { V.rec.onresult = V.rec.onerror = V.rec.onend = V.rec.onstart = null; V.rec.abort(); } catch (e) {}
+      V.rec = null;
+    }
+    V.state = 'idle';
+    setBtn('idle');
+    setLive('');
+  }
+
+  function start() {
+    if (!V.supported) {
+      setNote('当前浏览器不支持语音识别（Web Speech API）。建议使用最新版 Edge / Chrome，或直接手动输入。', 'err');
+      return;
+    }
+    if (V.state === 'listening') { stopByUser(); return; }
+    if (V.state === 'finalizing') return;
+
+    /* 本地文件打开方式：实测 file:// 下语音服务常完全无响应，提前告知 */
+    if (location.protocol === 'file:' && !V.warnedFile) {
+      V.warnedFile = true;
+      setNote('提示：本地文件方式打开的页面，语音识别可能受限。正在尝试启动，若 5 秒内没有反应，请改用在线版 geometry.startian.top。', 'warn');
+    }
+
+    V.rawText = ''; V.finalText = ''; V.sawResult = false; V.lastError = null;
+    showExtra(false, false);
+    if (location.protocol !== 'file:') setNote('');
+
+    var rec;
+    try { rec = new SR(); } catch (e) {
+      setNote('语音识别初始化失败：' + (e && e.message || e), 'err');
+      return;
+    }
+    V.rec = rec;
+    rec.lang = 'zh-CN';
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.maxAlternatives = 1;
+
+    rec.onstart = function () {
+      if (V.startupCheckId) { clearTimeout(V.startupCheckId); V.startupCheckId = null; }
+      V.state = 'listening';
+      setBtn('listening');
+      setLive('（请说题目…）');
+    };
+    rec.onresult = function (ev) {
+      var interim = '', fin = '';
+      for (var i = ev.resultIndex; i < ev.results.length; i++) {
+        var r = ev.results[i];
+        if (r.isFinal) fin += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      if (interim) setLive(interim);
+      if (fin) {
+        V.sawResult = true;
+        V.rawText += fin;
+      }
+    };
+    rec.onerror = function (ev) {
+      V.lastError = ev.error || 'unknown';
+      if (ev.error === 'aborted') return;    /* 主动取消，静默 */
+      if (ev.error === 'no-speech') {
+        cleanup();
+        setNote('没听见声音。靠近麦克风再说一次？也可以直接打字。', 'warn');
+        showExtra(true, false);
+        return;
+      }
+      cleanup();
+      var msg = ERR_MSG[ev.error] || ('识别出错（' + ev.error + '）。可以直接手动输入。');
+      setNote(msg, ev.error === 'no-speech' ? 'warn' : 'err');
+      showExtra(true, false);
+    };
+    rec.onend = function () {
+      /* 自然结束 / 用户 stop / 超时 stop：三种都走 finish 收尾 */
+      if (V.state === 'listening' || V.state === 'finalizing') finish();
+    };
+
+    try {
+      rec.start();
+      /* 快速失败检测：5 秒连 onstart 都没有（file:// 等受限环境），立即给出明确提示 */
+      V.startupCheckId = setTimeout(function () {
+        if (V.state === 'idle' && V.rec === rec) {
+          var wasFile = location.protocol === 'file:';
+          cleanup();
+          setNote(wasFile
+            ? '语音服务没有响应（本地文件方式打开时常见）。建议改用在线版 geometry.startian.top，或直接手动输入。'
+            : '语音服务没有响应。可能是网络或系统语音服务问题，请稍后重试，或直接手动输入。', 'err');
+          showExtra(true, false);
+        }
+      }, 5000);
+      /* 超时保护：20 秒仍无任何结果则停止并提示 */
+      V.timeoutId = setTimeout(function () {
+        if (V.state === 'listening' && !V.sawResult) {
+          V.lastError = 'timeout';
+          try { rec.stop(); } catch (e) {}
+        }
+      }, 20000);
+    } catch (e) {
+      cleanup();
+      setNote('无法启动语音识别：' + (e && e.message || e) + '。可以直接手动输入。', 'err');
+    }
+  }
+
+  function stopByUser() {
+    if (V.rec && V.state === 'listening') {
+      V.state = 'finalizing';
+      setBtn('finalizing');
+      setLive('');
+      try { V.rec.stop(); } catch (e) {}
+    }
+  }
+
+  /* 收尾：把识别结果规范化 → 填入输入框（幂等，事件先解绑防递归） */
+  function finish() {
+    var rec = V.rec;
+    V.rec = null;
+    if (rec) {
+      rec.onresult = rec.onerror = rec.onend = rec.onstart = null;
+      try { rec.abort(); } catch (e) {}
+    }
+    if (V.timeoutId) { clearTimeout(V.timeoutId); V.timeoutId = null; }
+
+    var raw = (V.rawText || '').trim();
+    if (!raw) {
+      V.state = 'idle'; setBtn('idle'); setLive('');
+      if (V.lastError === 'timeout') setNote('等了 20 秒没听到内容，已停止。可以再点一次语音输入，或直接打字。', 'warn');
+      else if (!V.lastError) setNote('没听清内容。再点一次语音输入试试，或直接打字。', 'warn');
+      showExtra(true, false);
+      return;
+    }
+
+    var res = normalizeSpeech(raw);
+    V.finalText = res.text;
+
+    var inp = $('aiInput');
+    if (inp) {
+      inp.value = res.text;
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    V.state = 'idle';
+    setBtn('idle');
+    setLive('');
+
+    var conv = res.changes.length ? '<br><span class="conv">已自动转换：' + res.changes.join('、') + '</span>' : '';
+    setNote('✓ 已填入输入框，可以直接编辑。' +
+      (res.text !== raw ? '<br><span class="conv">识别原文：' + escapeHtml(raw) + '</span>' : '') + conv, 'ok');
+    showExtra(true, res.text !== raw);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ============================================================
+     三、UI 绑定
+     ============================================================ */
+  function init() {
+    V.els.btn = $('aiVoiceBtn');
+    V.els.retry = $('aiVoiceRetry');
+    V.els.undo = $('aiVoiceUndo');
+    V.els.live = $('aiVoiceLive');
+    V.els.note = $('aiVoiceNote');
+    if (!V.els.btn) return;
+
+    V.els.btn.addEventListener('click', function () { start(); });
+    if (V.els.retry) V.els.retry.addEventListener('click', function () { start(); });
+    if (V.els.undo) V.els.undo.addEventListener('click', function () {
+      var inp = $('aiInput');
+      if (inp && V.rawText) {
+        inp.value = V.rawText;
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+        setNote('已改用识别原文（未做数学转换），可直接编辑。', 'ok');
+        showExtra(true, false);
+      }
+    });
+
+    if (!V.supported) {
+      setBtn('unsupported');
+      V.els.btn.title = '当前浏览器不支持语音识别';
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+
+  /* 测试钩子 */
+  V._testFinish = finish;
+  V._setRaw = function (t) { V.rawText = t; V.sawResult = true; };
+  V._errMsg = ERR_MSG;
+  V._ERR_TYPES = Object.keys(ERR_MSG);
+  /* 公开接口（按钮点击用的同一份实现） */
+  V.start = start;
+  V.stop = stopByUser;
+  V.normalize = normalizeSpeech;
 })();
 
 </script>
