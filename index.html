@@ -1631,6 +1631,14 @@ var SUP_MAP = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': 
 var SUB_MAP = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
 function preprocess(src) {
   var s = String(src);
+  /* 全角符号 → 半角（中文输入法常见）：（）＝，＋－×÷ 与数学减号 U+2212 */
+  s = s.replace(/（/g, '(').replace(/）/g, ')').replace(/＝/g, '=').replace(/，/g, ',')
+       .replace(/＋/g, '+').replace(/－/g, '-').replace(/×/g, '*').replace(/÷/g, '/')
+       .replace(/\u2212/g, '-').replace(/\u2013/g, '-');
+  /* 省略括号的三角函数（数学惯例）：sinθ / sin θ / sintheta → sin(θ) */
+  s = s.replace(/(^|[^A-Za-z])(sin|cos|tan|cot|sec)\s*(?:theta|θ)(?![A-Za-z])/gi, function (m, pre, fn) {
+    return pre + fn + '(θ)';
+  });
   /* 上标序列 → ^(n)：x² → x^(2)，x⁻¹ → x^(-1) */
   s = s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺]+/g, function (m) {
     var neg = false, dig = '';
@@ -2205,7 +2213,11 @@ function splitTop(s, seps) {
 /* 解析方程 / 曲线输入，返回描述对象
    kind: explicitY | explicitX | implicit | polar | param | surfaceZ | constY */
 G.parseEquation = function (src, mode) {
-  var s = String(src).trim().replace(/[；;]/g, ',').replace(/[（]/g, '(').replace(/[）]/g, ')');
+  var s = String(src).trim().replace(/[；;]/g, ',')
+    .replace(/[（]/g, '(').replace(/[）]/g, ')')
+    .replace(/＝/g, '=').replace(/，/g, ',')
+    .replace(/＋/g, '+').replace(/－/g, '-').replace(/\u2212/g, '-').replace(/\u2013/g, '-')
+    .replace(/×/g, '*').replace(/÷/g, '/');
   if (!s) throw new Error('请输入表达式');
 
   /* 提取可选的 t 范围后缀（参数方程 / 复数曲线通用）：..., t ∈ [a, b] */
