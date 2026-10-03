@@ -6706,6 +6706,7 @@ function addFuncStr(str, quiet) {
     if (parsed.kind === 'complexCurve') o.name = G.nameOf('z', 'func');
   }
   Scene.add(o);
+  try { window.__geoARGCheck && window.__geoARGCheck(str); } catch (eA) {}
   if (!quiet) toast('已添加 ' + parsed.display, 'ok');
   return o;
 }
@@ -10790,6 +10791,77 @@ console.log('[GeoStudio] 落地页交互已就绪');
   V.start = start;
   V.stop = stopByUser;
   V.normalize = normalizeSpeech;
+})();
+/* ============================================================
+   🔮 ARG · 几何工坊「心形线」+ 精简进度机（2026-10-03）
+   输入 r = 1 - sin(θ) → 心形浮出来 → 收集日志
+   ============================================================ */
+(function () {
+  'use strict';
+  var KEY = 'st_arg';
+  var state = (function () {
+    var raw = null;
+    try { var m = document.cookie.match(/(?:^|;\s*)st_arg=([^;]*)/); if (m) raw = decodeURIComponent(m[1]); } catch (e) {}
+    if (!raw) { try { raw = localStorage.getItem(KEY); } catch (e) {} }
+    try { var d = JSON.parse(raw || '{}'); if (!d || typeof d !== 'object') d = {}; if (!Array.isArray(d.logs)) d.logs = []; return d; }
+    catch (e) { return { logs: [] }; }
+  })();
+  function save() {
+    var raw = JSON.stringify(state);
+    try { localStorage.setItem(KEY, raw); } catch (e) {}
+    try {
+      var v = encodeURIComponent(raw);
+      if (v.length < 3800) document.cookie = 'st_arg=' + v + ';domain=.startian.top;path=/;max-age=31536000;SameSite=Lax';
+    } catch (e) {}
+  }
+  var toastTimer = 0;
+  var ARG = {
+    has: function (id) { return state.logs.indexOf(id) >= 0; },
+    count: function () { return state.logs.length; },
+    collect: function (id) {
+      if (state.logs.indexOf(id) >= 0) return false;
+      state.logs.push(id); save();
+      this.toast('📜 找到一篇日志（去主页头像连点 7 下看全文）');
+      return true;
+    },
+    reset: function () { state = { logs: [] }; save(); },
+    toast: function (msg) {
+      try {
+        var el = document.getElementById('__arg_toast');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = '__arg_toast';
+          el.style.cssText = 'position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(16px);opacity:0;z-index:9994;background:rgba(12,17,32,.96);color:#eef4ff;border:1px solid rgba(198,214,240,.4);border-radius:999px;padding:12px 24px;font:700 13px/1.5 system-ui,sans-serif;box-shadow:0 18px 44px rgba(0,0,0,.5);transition:all .45s cubic-bezier(.2,.85,.3,1.1);pointer-events:none;max-width:88vw;text-align:center';
+          document.body.appendChild(el);
+        }
+        el.textContent = msg;
+        requestAnimationFrame(function () { el.style.opacity = '1'; el.style.transform = 'translateX(-50%)'; });
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { el.style.opacity = '0'; el.style.transform = 'translateX(-50%) translateY(16px)'; }, 3200);
+      } catch (e) {}
+    }
+  };
+  window.ARG = window.ARG || ARG;
+
+  /* ---- 心形线检测：r = 1 ± sinθ / 1 ± cosθ ---- */
+  function isHeart(raw) {
+    var s = String(raw || '').toLowerCase().replace(/\s+/g, '');
+    s = s.replace(/theta/g, 'θ');
+    s = s.replace(/sin\(θ\)/g, 'sinθ').replace(/cos\(θ\)/g, 'cosθ');
+    s = s.replace(/\(θ\)/g, 'θ');
+    s = s.replace(/^r=/, '');
+    return /^1([+-])(sin|cos)θ$/.test(s);
+  }
+  window.__geoARGCheck = function (raw) {
+    try {
+      if (!isHeart(raw)) return;
+      if (state.logs.indexOf('log4') >= 0) return;
+      if (ARG.collect('log4')) {
+        ARG.toast('📜 数学比我会表达……（找到一篇日志 · 几何工坊）');
+      }
+    } catch (e) {}
+  };
+  window.__geoARGT = { isHeart: isHeart, check: window.__geoARGCheck, reset: ARG.reset };
 })();
 
 </script>
