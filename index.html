@@ -1568,6 +1568,379 @@ body.pure .fold-tab{display:flex}
 </a>
 
 <div id="toast-wrap" aria-live="polite"></div>
+<script>
+/* ==== i18n-kit v1.2 begin ==== */
+/* ══════════════════════════════════════════════════════════
+   🌐 多语言 i18n Kit（startian.top 全站共享 · v1.2 · 2026-10-04）
+   · 语言：zh（默认）/ en；跨站同步 cookie st_lang(.startian.top) + localStorage 兜底
+   · 自动识别：首次访问按 navigator.language（zh 开头 → 中文，其余 → English）
+   · 两种接入模式（可混用）：
+     ① 短语表模式（推荐，低侵入）：I18N.phrase({ '中文原文': 'English', ... })
+        自动扫描文本节点 / title / placeholder / aria-label / alt，动态插入的文本也自动翻译
+     ② 标注模式：data-i18n / data-i18n-html / data-i18n-title / data-i18n-aria / data-i18n-ph / data-i18n-alt
+   · 子树上加 data-i18n-skip 可整体跳过（用户输入内容、ARG 谜题原文等）
+   · API：I18N.t(k[,vars]) · I18N.tOr(k,fb) · I18N.tr(原文) · I18N.set(lang) · I18N.lang()
+          · I18N.phrase(map) · I18N.scan(root) · I18N.apply(root) · I18N.onChange(fn)
+          · I18N.fmtDate(date[,{weekday:true}]) · I18N.fmtNum(n)
+   · 切换入口：固定右下角胶囊（本 Kit 自动注入，无需页面代码）
+   ══════════════════════════════════════════════════════════ */
+var I18N = (function () {
+  'use strict';
+  var LS = 'st_lang';
+  var FALLBACK = 'zh';
+  var lang = FALLBACK;
+  var dict = { zh: {}, en: {} };
+  var phrase = {};      /* 短语表：中文原文（归一化）→ 译文 */
+  var listeners = [];
+  var bd = {};          /* boot data：原文快照等 */
+
+  /* ---- 基础词典（全站通用词条） ---- */
+  dict.zh['common.home'] = '主页';
+  dict.en['common.home'] = 'Home';
+  dict.zh['common.homeTitle'] = '返回星恬的小站主页';
+  dict.en['common.homeTitle'] = "Back to Startian's homepage";
+  dict.zh['common.close'] = '关闭';
+  dict.en['common.close'] = 'Close';
+  dict.zh['common.cancel'] = '取消';
+  dict.en['common.cancel'] = 'Cancel';
+
+  /* ---- 存储与识别 ---- */
+  function norm(v) {
+    v = String(v || '').toLowerCase();
+    if (v.indexOf('zh') === 0) return 'zh';
+    if (v.indexOf('en') === 0) return 'en';
+    return null;
+  }
+  function readCookie() {
+    try { var m = document.cookie.match(/(?:^|;\s*)st_lang=([^;]*)/); return m ? decodeURIComponent(m[1]) : null; }
+    catch (e) { return null; }
+  }
+  function readLS() { try { return localStorage.getItem(LS); } catch (e) { return null; } }
+  function persist(v) {
+    try { localStorage.setItem(LS, v); } catch (e) {}
+    try { document.cookie = 'st_lang=' + encodeURIComponent(v) + ';domain=.startian.top;path=/;max-age=31536000;SameSite=Lax'; } catch (e) {}
+  }
+  function detect() {
+    var s = norm(readCookie()) || norm(readLS());
+    if (s) return s;
+    var n = norm(navigator.language || navigator.userLanguage);
+    return n || FALLBACK;
+  }
+
+  /* ---- 文案 ---- */
+  /* tRaw：查词典（当前语言 → zh 兜底），查不到返回 null（= 保持原文） */
+  function tRaw(key) {
+    var v = (dict[lang] && dict[lang][key] != null) ? dict[lang][key] : null;
+    if (v == null) v = (dict[FALLBACK] && dict[FALLBACK][key] != null) ? dict[FALLBACK][key] : null;
+    return v;
+  }
+  function t(key, vars) {
+    var v = tRaw(key);
+    if (v == null) return key;
+    if (vars) v = String(v).replace(/\{(\w+)\}/g, function (m, k) { return (vars[k] != null) ? vars[k] : m; });
+    return v;
+  }
+  /* tOr：查不到时用传入的兜底值（页面 JS 动态文案用这个） */
+  function tOr(key, fallback) {
+    var v = tRaw(key);
+    return (v == null) ? fallback : v;
+  }
+  function add(obj) {
+    if (!obj) return;
+    ['zh', 'en'].forEach(function (k) {
+      if (obj[k]) for (var key in obj[k]) dict[k][key] = obj[k][key];
+    });
+  }
+  /* tr：短语表直译（原文进，译文出；zh 侧原样返回）-JS 动态文案直接用 */
+  function tr(s) {
+    if (lang === 'zh') return s;
+    var v = lookup(normText(s));
+    return (v == null) ? s : v;
+  }
+  function addPhrase(map) {
+    if (!map) return;
+    for (var k in map) { if (map[k] != null) phrase[normText(k)] = String(map[k]); }
+  }
+  /* 规则表：[[/正则/, '替换（可用 $1）'], ...] - 处理「已复习 3」「12 天有记录」这类数字拼接 */
+  var rules = [];
+  function addRules(list) {
+    if (!list) return;
+    for (var i = 0; i < list.length; i++) {
+      try {
+        var re = (list[i][0] instanceof RegExp) ? list[i][0] : new RegExp(list[i][0]);
+        rules.push([re, String(list[i][1])]);
+      } catch (e) {}
+    }
+  }
+  function lookup(t) {
+    var v = phrase[t];
+    if (v != null) return v;
+    for (var i = 0; i < rules.length; i++) {
+      try { if (rules[i][0].test(t)) return t.replace(rules[i][0], rules[i][1]); } catch (e) {}
+    }
+    return null;
+  }
+
+  /* ---- 短语表扫描（静态 + 动态） ---- */
+  function normText(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
+  var PTAGS = ['title', 'placeholder', 'aria-label', 'alt'];
+  function translText(node) {
+    var raw = node.nodeValue;
+    if (!raw) return;
+    var rec = node.__i18nR;
+    if (rec) {
+      if (lang === 'zh') {
+        if (raw === rec.en) { node.nodeValue = rec.orig; delete node.__i18nR; }
+        else if (raw !== rec.orig) { delete node.__i18nR; }
+        return;
+      }
+      if (raw === rec.en) return;
+      if (raw === rec.orig) { node.nodeValue = rec.en; return; }
+      delete node.__i18nR;
+    }
+    var out = lookup(normText(raw));
+    if (out == null) return;
+    if (lang === 'en') { if (raw !== out) { node.__i18nR = { orig: raw, en: out }; node.nodeValue = out; } }
+  }
+  function translAttrs(el) {
+    if (!el.getAttribute) return;
+    for (var i = 0; i < PTAGS.length; i++) {
+      var a = PTAGS[i], v = el.getAttribute(a);
+      if (v == null || v === '') continue;
+      var rec = el.__i18nA && el.__i18nA[a];
+      if (rec) {
+        if (lang === 'zh') {
+          if (v === rec.en) { el.setAttribute(a, rec.orig); delete el.__i18nA[a]; }
+          else if (v !== rec.orig) { delete el.__i18nA[a]; }
+          continue;
+        }
+        if (v === rec.en) continue;
+        if (v === rec.orig) { el.setAttribute(a, rec.en); continue; }
+        delete el.__i18nA[a];
+      }
+      var out = lookup(normText(v));
+      if (out == null) continue;
+      if (lang === 'en') {
+        if (v !== out) { if (!el.__i18nA) el.__i18nA = {}; el.__i18nA[a] = { orig: v, en: out }; el.setAttribute(a, out); }
+      }
+    }
+  }
+  function scanNode(node) {
+    if (!node) return;
+    if (node.nodeType === 9) node = node.documentElement || node.body;   /* 文档节点 → 转元素 */
+    if (!node) return;
+    if (node.nodeType === 3) { translText(node); return; }
+    if (node.nodeType !== 1) return;
+    var tag = node.tagName;
+    if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'TEXTAREA' || tag === 'NOSCRIPT') return;
+    if (node.hasAttribute('data-i18n-skip')) return;
+    translAttrs(node);
+    for (var c = node.firstChild; c; c = c.nextSibling) scanNode(c);
+  }
+  function scan(root) { try { scanNode(root || document.body || document.documentElement); } catch (e) {} }
+  /* 动态内容自动翻译（MutationObserver，逐节点增量，无重扫） */
+  var moOn = false;
+  function auto(root) {
+    if (moOn || typeof MutationObserver === 'undefined') return;
+    var target = root || document.body;
+    if (!target) {   /* head 提前注入时 body 还没解析出来，等 DOM ready */
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { auto(root); });
+      return;
+    }
+    moOn = true;
+    try {
+      var mo = new MutationObserver(function (muts) {
+        for (var i = 0; i < muts.length; i++) {
+          var m = muts[i];
+          try {
+            if (m.type === 'characterData') translText(m.target);
+            else if (m.type === 'attributes') translAttrs(m.target);
+            else if (m.type === 'childList') {
+              for (var j = 0; j < m.addedNodes.length; j++) scanNode(m.addedNodes[j]);
+            }
+          } catch (e) {}
+        }
+      });
+      mo.observe(target, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: PTAGS });
+    } catch (e) {}
+  }
+
+  /* ---- 日期 / 数字 ---- */
+  var MN_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var WD_ZH = '日一二三四五六';
+  var WD_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  function fmtDate(d, opt) {
+    if (typeof d === 'string') { var a = d.split('-'); d = new Date(+a[0], (+a[1] || 1) - 1, +a[2] || 1); }
+    if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+    opt = opt || {};
+    var s;
+    if (lang === 'zh') {
+      s = d.getFullYear() + ' 年 ' + (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日';
+      if (opt.weekday) s += ' · 星期' + WD_ZH.charAt(d.getDay());
+    } else {
+      s = MN_EN[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+      if (opt.weekday) s += ' · ' + WD_EN[d.getDay()];
+    }
+    return s;
+  }
+  function fmtNum(n) {
+    try { return Number(n).toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US'); }
+    catch (e) { return String(n); }
+  }
+
+  /* ---- DOM 标注应用（标注模式；词条缺失时恢复原文 - 保证切回中文能还原） ---- */
+  function apply(root) {
+    root = root || document;
+    try {
+      var i, list, v, el;
+      list = root.querySelectorAll('[data-i18n]');
+      for (i = 0; i < list.length; i++) {
+        el = list[i];
+        if (el.__i18nOrig == null) el.__i18nOrig = el.textContent;
+        v = tRaw(el.getAttribute('data-i18n'));
+        el.textContent = (v != null) ? v : el.__i18nOrig;
+      }
+      list = root.querySelectorAll('[data-i18n-html]');
+      for (i = 0; i < list.length; i++) {
+        el = list[i];
+        if (el.__i18nOrigHTML == null) el.__i18nOrigHTML = el.innerHTML;
+        v = tRaw(el.getAttribute('data-i18n-html'));
+        el.innerHTML = (v != null) ? v : el.__i18nOrigHTML;
+      }
+      list = root.querySelectorAll('[data-i18n-title]');
+      for (i = 0; i < list.length; i++) {
+        el = list[i];
+        if (el.__i18nOrigTitle == null) el.__i18nOrigTitle = el.title;
+        v = tRaw(el.getAttribute('data-i18n-title'));
+        el.title = (v != null) ? v : el.__i18nOrigTitle;
+      }
+      list = root.querySelectorAll('[data-i18n-aria]');
+      for (i = 0; i < list.length; i++) {
+        el = list[i];
+        if (el.__i18nOrigAria == null) el.__i18nOrigAria = el.getAttribute('aria-label') || '';
+        v = tRaw(el.getAttribute('data-i18n-aria'));
+        el.setAttribute('aria-label', (v != null) ? v : el.__i18nOrigAria);
+      }
+      list = root.querySelectorAll('[data-i18n-ph]');
+      for (i = 0; i < list.length; i++) {
+        el = list[i];
+        if (el.__i18nOrigPh == null) el.__i18nOrigPh = el.placeholder || '';
+        v = tRaw(el.getAttribute('data-i18n-ph'));
+        el.placeholder = (v != null) ? v : el.__i18nOrigPh;
+      }
+      list = root.querySelectorAll('[data-i18n-alt]');
+      for (i = 0; i < list.length; i++) {
+        el = list[i];
+        if (el.__i18nOrigAlt == null) el.__i18nOrigAlt = el.getAttribute('alt') || '';
+        v = tRaw(el.getAttribute('data-i18n-alt'));
+        el.setAttribute('alt', (v != null) ? v : el.__i18nOrigAlt);
+      }
+      /* 标题（短语表优先，其次 page.title 词条） */
+      if (!bd.__origTitle) bd.__origTitle = document.title;
+      var tv = lookup(normText(bd.__origTitle));
+      if (tv == null) tv = tRaw('page.title');
+      if (tv != null) { document.title = (lang === 'en') ? tv : bd.__origTitle; bd.__titleTouched = true; }
+      else if (bd.__titleTouched) { document.title = bd.__origTitle; }
+      document.documentElement.lang = (lang === 'zh') ? 'zh-CN' : 'en';
+      syncSwitch();
+    } catch (e) {}
+  }
+
+  function set(v) {
+    v = norm(v);
+    if (!v) return;
+    if (v === lang) { apply(document); scan(document); return; }
+    lang = v;
+    persist(v);
+    apply(document);
+    scan(document);
+    for (var i = 0; i < listeners.length; i++) { try { listeners[i](lang); } catch (e) {} }
+    try {
+      var live = document.getElementById('i18n-live');
+      if (live) live.textContent = (lang === 'zh') ? '已切换到中文' : 'Switched to English';
+    } catch (e) {}
+  }
+  function onChange(fn) { if (typeof fn === 'function') listeners.push(fn); }
+  function getLang() { return lang; }
+
+  /* ---- 切换入口（右下角胶囊，自动注入） ---- */
+  var SW_CSS = '.i18n-sw{position:fixed;right:14px;bottom:14px;z-index:9992;display:inline-flex;align-items:center;gap:2px;padding:3px;border-radius:999px;background:rgba(17,24,39,.6);-webkit-backdrop-filter:blur(10px) saturate(1.3);backdrop-filter:blur(10px) saturate(1.3);border:1px solid rgba(255,255,255,.16);box-shadow:0 6px 18px rgba(0,0,0,.2);font-family:inherit}' +
+    '.i18n-sw button{border:0;background:transparent;color:rgba(255,255,255,.72);font-size:12px;font-weight:700;letter-spacing:.4px;padding:6px 11px;border-radius:999px;cursor:pointer;font-family:inherit;transition:all .18s ease;line-height:1}' +
+    '.i18n-sw button:hover{color:#fff;background:rgba(255,255,255,.12)}' +
+    '.i18n-sw button:focus-visible{outline:2px solid #7dd3fc;outline-offset:1px}' +
+    '.i18n-sw button.on{background:rgba(255,255,255,.92);color:#1f2937;box-shadow:0 2px 8px rgba(0,0,0,.25)}' +
+    '.i18n-sw button:active{transform:translateY(1px)}' +
+    '.i18n-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}' +
+    '@media (max-width:620px){.i18n-sw{right:10px;bottom:10px}.i18n-sw button{padding:5px 9px;font-size:11.5px}}';
+
+  var swEl = null;
+  function buildSwitch() {
+    try {
+      if (!document.body) return;
+      var exist = document.querySelector('.i18n-sw');
+      if (exist) { swEl = exist; syncSwitch(); return; }
+      var st = document.createElement('style');
+      st.textContent = SW_CSS;
+      (document.head || document.documentElement).appendChild(st);
+      var wrap = document.createElement('div');
+      wrap.className = 'i18n-sw';
+      wrap.setAttribute('role', 'group');
+      wrap.setAttribute('aria-label', '切换语言 / Switch language');
+      [['zh', '中文'], ['en', 'English']].forEach(function (p) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('data-lang', p[0]);
+        b.textContent = p[1];
+        b.addEventListener('click', function () { set(p[0]); });
+        wrap.appendChild(b);
+      });
+      var live = document.createElement('span');
+      live.id = 'i18n-live';
+      live.className = 'i18n-sr';
+      live.setAttribute('aria-live', 'polite');
+      wrap.appendChild(live);
+      document.body.appendChild(wrap);
+      swEl = wrap;
+      syncSwitch();
+    } catch (e) {}
+  }
+  function syncSwitch() {
+    try {
+      if (!swEl) return;
+      var bs = swEl.querySelectorAll('button[data-lang]');
+      for (var i = 0; i < bs.length; i++) {
+        var on = bs[i].getAttribute('data-lang') === lang;
+        bs[i].classList.toggle('on', on);
+        bs[i].setAttribute('aria-pressed', on ? 'true' : 'false');
+      }
+    } catch (e) {}
+  }
+
+  /* ---- 启动 ---- */
+  lang = detect();
+  function boot() {
+    buildSwitch();
+    apply(document);
+    scan(document);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+
+  return {
+    t: t, tOr: tOr, tr: tr, set: set, apply: apply, scan: scan, auto: auto,
+    phrase: addPhrase, rules: addRules, add: add, lang: getLang, onChange: onChange,
+    fmtDate: fmtDate, fmtNum: fmtNum
+  };
+})();
+
+/* ---- 短语表（中文原文 → English）---- */
+I18N.phrase({"几何工坊 · 高中数学几何教学工作台": "Geometry Studio · A high-school geometry teaching workbench","几何工坊": "Geometry Studio","工作台": "Workbench","功能": "Features","常见问题": "FAQ","联系": "Contact","立即开始": "Get started","高中数学 · 平面几何 × 立体几何 · 实时联动": "High-school math · 2D geometry × 3D geometry · live sync","画出来": "Draw it","算清楚": "Compute it","讲明白": "Explain it","一个工作台装下高中数学的全部几何。函数与方程同步绘制、向量关系自动判定、面积体积距离二面角一键求解，所有参数实时联动，课堂演示与桌面移动端都好用。": "One workbench holds all the geometry of high-school math. Functions and equations draw together, vector relations are detected automatically, and area, volume, distance, and dihedral angles are solved with one tap, with every parameter syncing live. Great for classroom demos and on desktops or phones.","查看功能": "See features","零依赖单文件": "Zero-dependency single file","下载后断网可用": "Works offline once downloaded","适配课堂投影与手机": "Fits classroom projectors and phones","几何工坊 · 平面几何": "Geometry Studio · 2D geometry","交点 B": "Intersection B","📱 建议横屏使用，体验更佳": "📱 Landscape mode recommended for a better experience","知道了": "Got it","🔒 只读模式": "🔒 Read-only mode","退出": "Exit","WORKBENCH / 工作台": "WORKBENCH / Workbench","打开就能用的几何工作台": "A geometry workbench that's ready the moment you open it","平面与立体一键切换，输入即绘制，数值随图形实时联动": "Switch between 2D and 3D with one tap, draw as you type, and watch values sync with the figure in real time","平面几何": "2D geometry","立体几何": "3D geometry","撤销": "Undo","重做": "Redo","精度 2 位": "Precision: 2 digits","精度 3 位": "Precision: 3 digits","精度 4 位": "Precision: 4 digits","精度 6 位": "Precision: 6 digits","✏ 拖拽新建": "✏ Drag to create","拖拽：矩形": "Drag: rectangle","拖拽：圆": "Drag: circle","拖拽：长方体": "Drag: cuboid","拖拽：圆柱": "Drag: cylinder","步幅 无限制": "Step: unlimited","步幅 0.1": "Step: 0.1","步幅 0.5": "Step: 0.5","步幅 1": "Step: 1","步幅 2": "Step: 2","步幅 5": "Step: 5","步幅 10": "Step: 10","步幅 自定义…": "Step: custom…","视角 自由": "View: free","正视图": "Front view","侧视图": "Side view","俯视图": "Top view","🎦 纯净": "🎦 Clean","⬇ 导出预设": "⬇ Export preset","⬆ 导入预设": "⬆ Import preset","🖊 涂鸦": "🖊 Doodle","🔒 只读": "🔒 Read-only","示例": "Examples","导出 PNG": "Export PNG","清空": "Clear","帮助": "Help","函数 / 方程": "Function / equation","点 / 向量": "Point / vector","图形": "Shapes","输入表达式，回车添加": "Enter an expression and press Enter to add","支持": "Supports ","、隐式方程": ", implicit equations","、极坐标": ", polar coordinates","、参数方程": ", parametric equations","、虚数模式": ", imaginary mode","点（平面 A(1, 2) / 空间 P(1, 2, 3)）": "Point (2D A(1, 2) / 3D P(1, 2, 3))","向量": "Vector","选中两条向量后自动判定": "Detected automatically after selecting two vectors","垂直 / 平行 / 相交 / 重合": "Perpendicular / parallel / intersecting / coincident","；立体模式下选中两点可连线、三点可定平面": "; in 3D mode, two selected points connect and three define a plane","基本": "Basic","线段": "Segment","直线": "Line","多边形": "Polygon","自由点": "Free point","三角形": "Triangle","一般": "General","等边": "Equilateral","等腰": "Isosceles","直角": "Right","四边形": "Quadrilateral","平行四边形": "Parallelogram","矩形": "Rectangle","菱形": "Rhombus","正方形": "Square","梯形": "Trapezoid","曲线": "Curve","圆": "Circle","椭圆": "Ellipse","抛物线": "Parabola","扇形": "Sector","点击后在画布中央生成图形，拖动顶点或控制点即可调整；选中后一键求面积": "Click to create a shape at the center of the canvas, then drag vertices or control points to adjust it; select it to find its area with one tap","空间基础图形": "Basic 3D shapes","空间点": "Space point","平面": "Plane","多面体": "Polyhedron","正方体": "Cube","长方体": "Cuboid","正棱柱": "Regular prism","正棱锥": "Regular pyramid","正四面体": "Regular tetrahedron","自由四面体": "Free tetrahedron","旋转体": "Solid of revolution","圆柱": "Cylinder","圆锥": "Cone","球": "Sphere","圆台": "Frustum","平面图形（落在 z = 0）": "2D shapes (on z = 0)","拖拽旋转视角、滚轮缩放、Shift 加拖拽平移；几何体可一键求体积与表面积，选中两点也能连线、三点定平面": "Drag to rotate the view, scroll to zoom, Shift+drag to pan; solids can have their volume and surface area found with one tap, and two selected points can be connected or three used to define a plane","对象": "Objects","双击名字或点铅笔可改名": "Double-click the name or click the pencil to rename","滚轮缩放 · 拖拽平移 · 点击选中 · 拖顶点调整": "Scroll to zoom · drag to pan · click to select · drag vertices to adjust","输入": "Input","读数": "Readout","参数": "Parameter","表达式里出现 a b c d f g h k 时自动生成滑块（e 保留为自然常数）": "A slider is generated automatically when a b c d f g h k appear in an expression (e is reserved for the natural constant)","选中对象": "Select an object","在画布或列表里点选对象，这里显示它的坐标与性质": "Click an object on the canvas or in the list to see its coordinates and properties here","一键计算": "One-tap compute","选中对象后，这里出现可用的计算按钮": "Select an object and the available compute buttons appear here","计算过程": "Computation","FEATURES / 功能": "FEATURES / Features","课堂要用的，都准备好了": "Everything you need for class is ready","从一条函数曲线到一个二面角，几何教学里最费黑板的部分，交给它": "From a function curve to a dihedral angle, hand over the blackboard-hungriest parts of geometry teaching","函数与方程同绘": "Draw functions and equations together","显式、隐式、极坐标、参数方程四类输入同步绘制，圆、椭圆、双曲线一句方程就能画出来": "Explicit, implicit, polar, and parametric inputs all draw together; a circle, ellipse, or hyperbola comes from a single equation","数值实时联动": "Live value sync","斜率、倾斜角、交点、距离随拖动即时刷新，读数默认精确到小数点后三位": "Slope, inclination, intersections, and distance refresh instantly as you drag, with readouts precise to three decimal places by default","向量关系自动判定": "Automatic vector-relation detection","选中两条向量，自动判出垂直、平行、相交、重合，夹角与点积一并给出": "Select two vectors and it automatically tells perpendicular, parallel, intersecting, or coincident, along with the angle and dot product","图形与一键面积": "Shapes and one-tap area","特殊三角形、平行四边形、圆、椭圆等基础图形随点随画，选中即出面积与推导": "Basic shapes like special triangles, parallelograms, circles, and ellipses are drawn point by point, and their area and derivation appear on selection","空间坐标系": "3D coordinate system","立体模式建立 xyz 空间，点、线、面、体自由标注，拖拽旋转、滚轮缩放": "3D mode sets up an xyz space where points, lines, planes, and solids can be freely labeled, with drag-to-rotate and scroll-to-zoom","一键体积": "One-tap volume","柱、锥、台、球与四面体体积一键求解，公式与代入值同屏展示": "Prisms, pyramids, frustums, spheres, and tetrahedra have their volume solved with one tap, showing the formula and substituted values on the same screen","距离与二面角": "Distance and dihedral angle","线线、线面、面面距离与二面角一键求解，画面同步图解，推导步骤写满公式": "Line-line, line-plane, and plane-plane distances plus dihedral angles are solved with one tap, with synchronized diagrams and full formulas in the derivation","参数滑块": "Parameter sliders","a 至 h 共八个参数实时调节，拖动滑块全图联动，含参题目一拖就懂": "Eight parameters from a to h adjust live; drag a slider and the whole figure reacts, so parameterized problems click with a single drag","课堂预设与导出": "Classroom presets and export","教材常见场景一键加载，画布一键导出 PNG，直接贴进课件与讲义": "Load common textbook scenes with one tap and export the canvas as PNG to drop straight into slides and handouts","FAQ / 常见问题": "FAQ / Frequently asked questions","你可能想先问的": "What you might want to ask first","关于表达式、精度、数据与保存，都在这里说清楚": "Expressions, precision, data, and saving are all explained clearly here","这个工具要注册或联网吗？": "Does this tool need sign-up or an internet connection?","不需要。它是单个 HTML 文件，": "No. It's a single HTML file, ","下载到本地后": "once downloaded locally, ","除字体外没有任何外部依赖，双击就能在浏览器里打开，断网的教室电脑也照常使用。（直接在线访问时首次需要联网加载）": "it has no external dependencies other than fonts. Double-click to open it in a browser, and it works on an offline classroom computer too. (Direct online access needs an internet connection the first time.)","支持哪些表达式写法？": "What expression syntax is supported?","三角函数、对数、指数、开方等常用函数全支持，还能写隐式方程、极坐标与参数方程。参数用 a 到 h 八个字母，e 保留为自然常数。像 2x、3sin(x)、πr 这样的省略乘号写法也能直接输入。": "Trig, log, exp and root functions are supported, plus implicit, polar and parametric equations. Parameters use a-h (e is the natural constant); omitted multiplication like 2x, 3sin(x), πr works too.","交点和距离是精确值吗？": "Are intersections and distances exact?","直线与直线、圆与直线等可解析的情形用精确求解；一般曲线交点采用扫描加二分细化的数值方法，精度约百万分之一。交点只在当前视野范围内查找：若某个交点没显示，把视图": "Line-line and circle-line cases that can be solved analytically use exact solving; intersections of general curves use a numerical scan with bisection refinement, precise to about one part per million. Intersections are only searched within the current view: if a certain intersection isn't shown, ","拉远": "zoom out","（滚轮向下缩小比例尺）让更大范围进入视野即可；若交点已可见、想让位置读数更精确，": " (scroll down to shrink the scale) so a larger range enters the view; if the intersection is already visible and you want a more precise position readout, ","放大": "zoom in ","视图提高分辨率即可。": "to raise the view's resolution.","手机上能用吗？": "Can I use it on my phone?","可以。单指拖拽平移或旋转，双指捏合缩放，输入面板与读数面板会收成底部抽屉，竖屏横屏都能用。": "Yes. Drag with one finger to pan or rotate, pinch with two fingers to zoom, and the input and readout panels collapse into a bottom drawer. It works in both portrait and landscape.","数据会离开我的电脑吗？": "Will my data leave my computer?","不会。全部计算都在浏览器里进行，画的东西不会被上传，也没有账号系统。唯一离开本机的是字体文件请求，就算加载失败也只是换成系统字体。": "No. All computation happens in the browser, what you draw is never uploaded, and there's no account system. The only thing that leaves your machine is a font file request, and even if it fails it just falls back to a system font.","可以拿来出题或做课件吗？": "Can I use it to make problems or teaching materials?","当然可以。画布一键导出高清 PNG，直接贴进讲义与课件；内置的教材预设场景可以作为讲题起点，改几个参数就能出新题。": "Of course. Export the canvas as high-resolution PNG and drop it straight into handouts and slides; the built-in textbook presets make a good starting point, and changing a few parameters produces a new problem.","CONTACT / 联系": "CONTACT / Contact","关于作者": "About the author","几何工坊由星恬制作与维护，欢迎交流、报错与提建议": "Geometry Studio is made and maintained by Startian. Feedback, bug reports, and suggestions are welcome","点击复制": "Click to copy","QQ 邮箱": "QQ Mail","GitHub 主页": "GitHub","项目仓库": "Project repository","哔哩哔哩": "Bilibili","个人主页": "Personal homepage","几何工坊 · 为数学课堂而做": "Geometry Studio · Made for the math classroom","开始作图": "Start drawing","使用说明": "Instructions","回到顶部": "Back to top","零依赖 · 单文件 · 数据存在本机": "Zero dependencies · single file · data stored locally","几何工坊 · 使用说明": "Geometry Studio · Instructions","三步上手、表达式速查、交互手势与默认约束，一页看完": "Get started in three steps, a quick expression reference, gestures, and default constraints, all in one page","一、三步上手": "1. Three steps to get started","在左侧面板输入表达式或创建图形，回车即绘制": "Enter an expression or create a shape in the left panel; press Enter to draw","画布上滚轮缩放、拖拽平移、点击选中对象、拖动顶点或控制点调整形状": "On the canvas, scroll to zoom, drag to pan, click to select an object, and drag vertices or control points to reshape","右侧面板查看实时读数，拖动参数滑块看图形联动，选中对象后点计算按钮": "Check live readouts in the right panel, drag parameter sliders to watch the figure react, and select an object to use the compute buttons","二、表达式速查": "2. Expression quick reference","三角函数": "Trigonometric functions","sin cos tan cot sec csc；反三角 arcsin arccos arctan arccot（也可写 asin 等）；双曲 sinh cosh tanh": "sin cos tan cot sec csc; inverse trig arcsin arccos arctan arccot (asin etc. also work); hyperbolic sinh cosh tanh","对数": "Logarithms","ln、lg、log(x, b)；带底数可写 log₂(x) 或 log_2(x)": "ln, lg, log(x, b); with a base you can write log₂(x) or log_2(x)","根号": "Radicals","√2、√(x+1)、∛8（也可写 sqrt / cbrt）": "√2, √(x+1), ∛8 (sqrt / cbrt also work)","绝对值": "Absolute value","|x|、|x| + |y|（成对出现；复杂嵌套请用 abs()）": "|x|, |x| + |y| (used in pairs; use abs() for complex nesting)","取整（高斯函数）": "Rounding (Gaussian function)","[x]、⌊x⌋、⌈x⌉（不超取整 / 上取整）；也可写 floor / ceil / gauss / int": "[x], ⌊x⌋, ⌈x⌉ (floor / ceiling); floor / ceil / gauss / int also work","阶乘": "Factorial","5!、x!（整数精确；非整数自动用 Γ 函数平滑）": "5!, x! (exact for integers; non-integers are smoothed with the Γ function)","度数": "Degrees","sin(30°)、45°（自动换算弧度）": "sin(30°), 45° (auto-converted to radians)","上标直接打": "Type superscripts directly","x²、x³、x⁻¹（等价于 x^2、x^3、x^-1）": "x², x³, x⁻¹ (equivalent to x^2, x^3, x^-1)","常数": "Constants","pi / π、e（自然常数）、∞": "pi / π, e (natural constant), ∞","其它函数": "Other functions","不等式": "Inequality","y > x^2、x^2 + y^2 ≤ 4（画区域）；x^2 - a > 0（求一元解集）；支持 < > ≤ ≥ ≠ 与 <= >= !=": "y > x^2, x^2 + y^2 ≤ 4 (draw regions); x^2 - a > 0 (solve a one-variable solution set); supports < > ≤ ≥ ≠ and <= >= !=","a b c d f g h k 共 8 个，出现即生成滑块（e 已保留给自然常数）": "a b c d f g h k, eight in total; each generates a slider when it appears (e is reserved for the natural constant)","🌀 虚数模式": "🌀 Imaginary mode","含": "Expressions containing ","的表达式自动进入复平面（实部作 x 轴、虚部作 y 轴）：": " automatically enter the complex plane (real part as the x-axis, imaginary part as the y-axis):","画曲线（如欧拉公式的单位圆）；": "draw curves (such as the unit circle of Euler's formula);","得复数点 −1；": "yield the complex point −1;","验证恒等式。可用函数 sin cos tan sinh cosh tanh exp ln lg sqrt abs pow，参数 a~k 照常联动；t 范围默认可写": "verify identities. Available functions are sin cos tan sinh cosh tanh exp ln lg sqrt abs pow, with params a~k syncing as usual; the default t range can be set to ","自定义": "custom","省略乘号": "Omitted multiplication signs","2x、3sin(x)、πr、2√3、2|x| 都会自动补上乘号；2i、e^(iπ) 同样适用": "2x, 3sin(x), πr, 2√3, 2|x| all get the multiplication sign filled in automatically; the same applies to 2i and e^(iπ)","输入示例": "Input examples","立体曲面": "3D surfaces","立体模式下含 x 与 y 的表达式如 z = sin(x)*cos(y) 自动切为曲面": "In 3D mode, expressions containing x and y such as z = sin(x)*cos(y) automatically become surfaces","三、图形与交互": "3. Shapes and interaction","平面模式": "2D mode","滚轮缩放（以指针为中心）、空白处拖拽平移、点击选中、拖顶点移动": "Scroll to zoom (centered on the pointer), drag empty space to pan, click to select, drag vertices to move","空间图形": "3D shapes","立体模式的「几何体」面板顶部可": "At the top of the \"Solids\" panel in 3D mode you can ","一键创建空间点 / 线段 / 直线 / 平面": "create a space point / segment / line / plane with one tap","，拖动顶点即可调整；也可以先建点、选中两点连线、三点定平面": ", then drag vertices to adjust; you can also create points first, select two to connect them, and three to define a plane","立体模式": "3D mode","拖拽旋转、滚轮缩放、Shift 或右键拖拽平移、双击复位视角；点选对象后拖动 = 在水平面内移动；": "Drag to rotate, scroll to zoom, Shift- or right-drag to pan, double-click to reset the view; drag after selecting an object = move it within the horizontal plane;","按住 Ctrl 拖动 = 竖直升降（调高度）": "Hold Ctrl and drag = vertical move (adjust height)","函数与曲面同样能移动": "Functions and surfaces can be moved the same way","：先点选，再拖动平移，右侧面板还可设位置与旋转角度（∠x / ∠y / ∠z）；坐标也可在右侧直接输入": ": select first, then drag to move; the right panel can also set position and rotation angles (∠x / ∠y / ∠z); coordinates can be typed directly on the right too","触摸屏": "Touchscreen","单指平移或旋转，双指捏合缩放，双指拖动平移": "One finger to pan or rotate, pinch with two fingers to zoom, two-finger drag to pan","涂鸦模式": "Doodle mode","开涂鸦后随手画，只作批注、不改任何几何对象；": "With doodle on, draw freely as annotation only, without changing any geometric object;","滚轮 = 缩放，Alt+滚轮 = 旋转视角": "scroll = zoom, Alt+scroll = rotate the view","（立体模式）；触摸屏：单指画、": " (3D mode); touchscreen: one finger to draw,","双指捏合缩放 / 双指旋转": "pinch with two fingers to zoom / rotate with two fingers","；笔迹自动存在本机": "; strokes are stored locally automatically","符号输入": "Symbol input","输入框下方有符号条：√ ² | | ! [ ] ≤ ≥ ° 等一键插入，手机上也顺手": "A symbol bar below the input box inserts √ ² | | ! [ ] ≤ ≥ ° and more with one tap, handy on phones too","命名的点": "Named points","直接写": "Just type ","即可命名为 P；对象列表里点铅笔图标（或双击名字）可随时改名，关联图形名自动跟随（△ABC 改 A 为 P → △PBC）": "to name it P; click the pencil icon in the object list (or double-click the name) to rename anytime, and related shape names follow automatically (△ABC, rename A to P → △PBC)","撤销 / 重做": "Undo / redo","Ctrl+Z 撤销、Ctrl+Shift+Z（或 Ctrl+Y）重做，也可以点工具栏按钮；添加、删除、清空、拖动、改参数都能撤": "Ctrl+Z to undo, Ctrl+Shift+Z (or Ctrl+Y) to redo, or click the toolbar buttons; adding, deleting, clearing, dragging, and changing parameters can all be undone","自动保存": "Autosave","场景自动保存在本机浏览器里，关掉页面再打开会自动恢复（含涂鸦批注与解析卡）；数据不上传任何地方": "The scene is saved automatically in your local browser and restored when you reopen the page (including doodle annotations and analysis cards); data is never uploaded anywhere","预设导出 / 导入": "Preset export / import","「导出预设」存成 JSON 文件，": "\"Export preset\" saves to a JSON file, ","可自定义文件名": "the file name is customizable","（如 二面角-正方体-日期），": "(e.g. dihedral-cube-date), ","涂鸦批注与解析卡一并保存": "doodle annotations and analysis cards are saved as well","；「导入预设」会替换当前场景（有确认提醒，建议先导出备份当前内容）": "; \"Import preset\" replaces the current scene (with a confirmation prompt; exporting a backup first is recommended)","选择与多选": "Selection and multi-select","依次点选对象即可多选": "Click objects in turn to multi-select","（最多 99 个，无需按任何键），再点一次取消、点空白处清空；连选两个平面求二面角、选中两点连线、三点定平面（立体模式）": "(up to 99, no key needed); click again to deselect or click empty space to clear; select two planes for a dihedral angle, two points to connect them, or three to define a plane (3D mode)","导数与圆锥曲线": "Derivatives and conic sections","选中函数曲线可": "Select a function curve to ","求导 f′(x)": "Derivative f′(x)","（可一键把导函数画到画布）、分析": " (plot the derivative on the canvas with one tap), analyze","极值与单调性": "extrema and monotonicity","（可标注极值点）、作": " (mark extrema points), draw","切线": "Tangent line","（指定 x 或选中曲线上的点）；隐式方程可做": " (specify x or select a point on the curve); implicit equations support","圆锥曲线分析": "Conic section analysis","，自动识别椭圆 / 双曲线 / 抛物线并给出中心、半轴、焦点、离心率、准线、渐近线等；直线与曲线选中后可求": ", automatically identifying ellipse / hyperbola / parabola and giving the center, semi-axes, foci, eccentricity, directrix, asymptotes, and more; with a line and a curve selected you can find the ","弦长": "Chord length","🎤 语音输入": "🎤 Voice input","AI 出图面板里有「": "In the AI figure panel there's a \"","语音输入": "Voice input","」按钮：点一下说出题目（如「已知正方体棱长二，求体对角线长」）。": "\" button: tap it and speak the problem (e.g. \"given a cube with edge length 2, find the space diagonal\").","想说多久说多久": "Speak for as long as you like","，识别跟着你的语速走，说完停顿约 4 秒自动结束（也可以随时点按钮立刻结束），单次最长 90 秒；面板上实时显示": ", and recognition follows your pace. About 4 seconds of silence after you finish ends it automatically (or tap the button to stop anytime), with a maximum of 90 seconds per recording; the panel shows live ","已听秒数": "seconds heard","。识别结果自动填入输入框，": ". The result is filled into the input box automatically, ","可直接编辑": "directly editable","；会自动做": "; it automatically performs ","数学口述转换": "math speech conversion","（艾克斯→x、的平方→^2、根号→√、三分之一→(1/3)、大于等于→≥、九十度→90° 等），并显示转换明细与": " (\"ex\"→x, squared→^2, root→√, one-third→(1/3), greater than or equal→≥, ninety degrees→90°, etc.) and shows the conversion details along with ","原始识别文本": "the raw recognized text","，可一键": ", with one-tap ","用原文": "Use original","或": "or","重试": "Retry","；输入框里已有你改过的内容时，新识别会": "; if the input box already holds content you've edited, new recognition will ","追加": "append","而不是覆盖。首次使用需在浏览器弹窗里": " rather than overwrite. On first use you'll need to ","允许麦克风": "allow the microphone","；识别依赖浏览器厂商的语音服务（需联网），连不上、没听清或权限被拒时会给出对应提示，": " in the browser popup; recognition relies on the browser vendor's speech service (internet required), and you'll get a matching message if it can't connect, hears nothing, or permission is denied, ","手动打字始终不受影响": "typing manually always works regardless","语音注意项": "Notes on voice input","嘈杂环境下建议靠近麦克风、放慢语速；方言口音识别率取决于系统语音服务（本项目指定普通话 zh-CN，不能切换方言）；数学符号以": "In noisy places, move closer to the microphone and slow down; recognition of dialectal accents depends on the system speech service (this project uses Mandarin zh-CN and can't switch dialects); math symbols follow the ","读法": "pronunciation","为准（说「根号二」「三分之一」而不是「根号符号」）；本地文件（file://）方式打开时语音可能受限，建议用在线版": " (say \"square root of two\" or \"one third\", not \"root symbol\"); voice may be limited when opened as a local file (file://), so the online version is recommended","四、默认约束（明确设定）": "4. Default constraints (explicitly set)","参数数量": "Number of parameters","8 个（a b c d f g h k）；滑块默认范围": "8 (a b c d f g h k); default slider range ","（支持负数），步长 0.05；可手动输入精确值自动扩展，也可点参数行的 ⇔ 按钮": " (negatives supported), step 0.05; typing an exact value extends it automatically, or click the ⇔ button on the parameter row","自定义滑块范围": "custom slider range","数值精度": "Numeric precision","默认 3 位小数，可切 2 / 4 / 6 位；内部计算使用双精度": "3 decimal places by default, switchable to 2 / 4 / 6; internal computation uses double precision","可绘制范围": "Drawable range","平面视图半宽 0.2 至 500 之间自由缩放，超出会被限制": "The 2D view half-width zooms freely between 0.2 and 500, and is clamped beyond that","采样密度": "Sampling density","显式函数逐像素采样；隐式方程为自适应网格（约每 6px 一格，上限 260×260，拖动时自动降密）；极坐标 1800 点；参数方程 2400 点": "Explicit functions are sampled per pixel; implicit equations use an adaptive grid (about one cell per 6px, up to 260×260, with density reduced while dragging); polar has 1800 points; parametric has 2400 points","曲线参数范围": "Curve parameter range","极坐标 θ ∈ [0, 2π]；参数方程 t ∈ [-2π, 2π]；复数曲线 t ∈ [0, 2π]；均可用「, t ∈ [a, b]」自定义（如": "Polar θ ∈ [0, 2π]; parametric t ∈ [-2π, 2π]; complex curves t ∈ [0, 2π]; all can be customized with \", t ∈ [a, b]\" (e.g. ","曲面网格": "Surface mesh","48×48（拖动中 32×32），仅立体模式支持": "48×48 (32×32 while dragging), supported in 3D mode only","交点范围": "Intersection scope","显式×显式、显式×隐式、直线×任意曲线；隐式×隐式暂不支持": "explicit×explicit, explicit×implicit, line×any curve; implicit×implicit is not yet supported","对象上限": "Object limits","曲线 12 条、点 60 个、图形 40 个、几何体 8 个（软上限，超出会提示）": "12 curves, 60 points, 40 shapes, 8 solids (soft limits, with a warning when exceeded)","进阶玩法：浏览器控制台里可以通过": "Advanced: in the browser console you can ","直接调用内部引擎，做批量实验或二次开发": "call the internal engine directly for batch experiments or further development","AI 出图": "AI figure","未设置 Key": "No Key set","保存": "Save","AI 分析并建造": "AI analyze & build","深度思考（V4 · 更准更慢，压轴题建议勾选）": "Deep thinking (V4 · more accurate but slower; recommended for the hardest problems)","主页": "Home","几何工坊 首页": "Geometry Studio home","页内导航": "In-page navigation","切换亮暗主题": "Toggle light/dark theme","撤销（Ctrl+Z）": "Undo (Ctrl+Z)","重做（Ctrl+Shift+Z）": "Redo (Ctrl+Shift+Z)","数值显示精度": "Numeric display precision","拖拽新建：按住画布拖出尺寸框，松手生成；拖拽中按住 Shift 上下移动可调高度": "Drag to create: hold and drag out a size box on the canvas, release to generate; hold Shift while dragging to move up/down and adjust height","拖拽新建的类型": "Type to drag-create","拖拽新建类型": "Drag-create type","拖拽 / 缩放 / 参数调节的步进大小（仅按整数倍调整）": "Step size for dragging / zooming / parameter adjustment (adjusts by integer multiples only)","步幅": "Step","固定视角后禁止自由旋转，拖拽仅调整该视图允许的方向": "Once the view is fixed, free rotation is disabled and dragging only adjusts the directions that view allows","视角": "View","纯净模式：隐藏介绍内容并进入全屏，可逐块收起组件": "Clean mode: hides intro content and goes fullscreen, letting you collapse components one by one","导出预设：把当前场景保存为 JSON 文件": "Export preset: saves the current scene as a JSON file","导入预设：从 JSON 文件恢复场景": "Import preset: restores a scene from a JSON file","涂鸦层：只在批注层作画，不影响任何几何对象": "Doodle layer: draw only on the annotation layer, without affecting any geometric object","只读模式：仅可查看与平移缩放": "Read-only mode: view, pan, and zoom only","导出当前画布为 PNG": "Export the current canvas as PNG","清空当前模式的所有对象": "Clear all objects in the current mode","添加": "Add","收起 / 展开输入面板（纯净模式）": "Collapse / expand the input panel (Clean mode)","收起或展开输入面板": "Collapse or expand the input panel","收起 / 展开读数面板（纯净模式）": "Collapse / expand the readout panel (Clean mode)","收起或展开读数面板": "Collapse or expand the readout panel","点击复制 QQ 号": "Click to copy the QQ number","关闭帮助": "Close help","设置 DeepSeek API Key（只存本机）": "Set DeepSeek API Key (stored locally only)","sk-…（DeepSeek Key，只存本机）": "sk-… (DeepSeek Key, stored locally only)","输入题目，AI 自动建图并给解析，如：正方体棱长 2，求体对角线长": "Enter a problem and AI builds the figure with an analysis, e.g. a cube with edge length 2, find the space diagonal","语音输入：说出题目，自动转成文字填进输入框": "Voice input: speak the problem and it's turned into text in the input box","重新说一遍": "Say it again","改用识别原文（不经过数学转换）": "Use the raw recognition (without math conversion)","AI 出图：点击展开 · 按住可拖动": "AI figure: click to expand · press and hold to drag","返回星恬的小站主页": "Back to Startian's Little Site home","高中数学平面与立体几何可视化教学工作台，支持函数绘图、几何判定、面积体积求解与 AI 出图": "A visual teaching workbench for high-school plane and solid geometry, supporting function plotting, geometric tests, area and volume solving, and AI figure generation","星恬": "Startian","未定义": "undefined","数字格式有误:": "Invalid number format:","无法识别的字符「": "Unrecognized character \"","表达式语法错误，缺少「": "Expression syntax error, missing \"","表达式意外结束": "Expression ended unexpectedly","表达式语法错误，意外的「": "Expression syntax error, unexpected \"","表达式末尾有多余内容": "Extra content at the end of the expression","未知符号「": "Unknown symbol \"","未知函数「": "Unknown function \"","表达式编译失败": "Expression compilation failed","虚数模式里没有「": "No such item in imaginary mode: \"","」：变量请用 t（如 e^(i*t)），实部虚部会自动成为 x、y 轴": "\": use variable t (e.g. e^(i*t)); the real and imaginary parts become the x and y axes automatically","虚数模式：不支持的符号「": "Imaginary mode: unsupported symbol \"","」（变量请用 t，常数 i π e，参数 a~k）": "\" (use variable t, constants i, π, e, parameters a~k)","虚数模式：不支持运算符「": "Imaginary mode: unsupported operator \"","虚数模式暂不支持「": "Imaginary mode does not yet support \"","()」（可用：sin cos tan sinh cosh tanh exp ln lg sqrt abs pow）": "()\" (available: sin cos tan sinh cosh tanh exp ln lg sqrt abs pow)","虚数表达式编译失败": "Imaginary expression compilation failed","t 范围解析失败：": "Failed to parse t range:","t 范围必须是常数（如 t ∈ [0, 2π]）": "The t range must be constant (e.g. t ∈ [0, 2π])","t 范围数值无效": "Invalid value in t range","虚数模式仅在平面几何可用，请先切到平面模式": "Imaginary mode is only available in plane geometry; switch to plane mode first","复数不能比较大小（不支持 < > ≤ ≥ ≠）": "Complex numbers cannot be compared ( < > ≤ ≥ ≠ unsupported)","等号左边不能为空": "The left side of the equals sign cannot be empty","请输入复数表达式，例如 e^(i*t)": "Enter a complex expression, e.g. e^(i*t)","t 范围需要满足终点大于起点": "The t range must have the end greater than the start","z(t) 复平面曲线，t ∈ [": "z(t) complex-plane curve, t ∈ [","恒等式两端不能含 t；画复平面曲线请写成 z = e^(i*t)": "An identity cannot contain t on either side; to draw a complex-plane curve write z = e^(i*t)","请输入表达式": "Enter an expression","参数方程只能包含变量 t，出现了「": "A parametric equation may contain only the variable t, but \" appeared","参数方程需要包含变量 t，例如 x=cos(t)": "A parametric equation must contain the variable t, e.g. x=cos(t)","若要输入参数方程请写成 x=(...), y=(...) 的形式": "To enter a parametric equation, write it as x=(...), y=(...)","关系符左边不能为空": "The left side of the relation cannot be empty","平面表达式中不能出现 z（立体曲面请写成 z = ...）": "z cannot appear in a plane expression (for a solid surface write z = ...)","这里不能出现 t 或 θ：t 用于参数方程，θ 用于极坐标": "t and θ cannot appear here: t is for parametric equations, θ for polar coordinates","平面表达式中不能出现 z": "z cannot appear in a plane expression","极坐标方程只能包含 θ，例如 r=2*cos(θ)": "A polar equation may only contain θ, e.g. r=2*cos(θ)","极坐标方程不能包含 t": "A polar equation cannot contain t","曲面 z=f(x,y) 仅在立体几何模式可用": "The surface z=f(x,y) is only available in solid geometry mode","曲面表达式中不能出现 t 或 θ": "t and θ cannot appear in a surface expression","平面隐式方程中不能出现 z": "z cannot appear in a plane implicit equation","不等式里不能出现 z": "z cannot appear in an inequality","不等式里不能出现 t 或 θ": "t and θ cannot appear in an inequality","恒成立": "always true","恒不成立": "never true","点需要 2 个或 3 个坐标，例如 A(1, 2) 或 P(1, 2, 3)": "A point needs 2 or 3 coordinates, e.g. A(1, 2) or P(1, 2, 3)","三维点请切换到立体几何模式": "For a 3D point, switch to solid geometry mode","点的坐标里只能出现数值或参数": "A point's coordinates may contain only numbers or parameters","向量请写成 u = (3, 4) 的形式": "Write a vector as u = (3, 4)","向量需要 2 个或 3 个分量，例如 u = (3, 4)": "A vector needs 2 or 3 components, e.g. u = (3, 4)","三维向量请切换到立体几何模式": "For a 3D vector, switch to solid geometry mode","向量的分量里只能出现数值或参数": "A vector's components may contain only numbers or parameters","零向量": "Zero vector","向量长度为零，方向未定义": "The vector has zero length; its direction is undefined","完全重合": "Identical","起点相同、方向相同、长度相等，两条向量相等": "Same start, same direction and equal length-the two vectors are equal","重合（共线）": "Coincident (collinear)","起点在同一条直线上，所在直线重合": "Their starts lie on the same line; the two lines coincide","平行": "Parallel","方向相同，所在直线平行": "Same direction; the two lines are parallel","方向相反，所在直线平行": "Opposite directions; the two lines are parallel","垂直": "Perpendicular","数量积为 0，两向量互相垂直": "Dot product is 0, so the vectors are perpendicular","异面": "Skew","方向不平行且不共面，两条所在直线异面": "Directions are not parallel and not coplanar; the two lines are skew","相交": "Intersecting","共起点，夹角为": "Shared start; angle between them is ","两条所在直线相交": "The two lines intersect","log(a, b) 需常数底才可求导": "log(a, b) needs a constant base to be differentiated","函数": "Function","暂不支持求导": "Differentiation not yet supported","表达式结构不支持求导": "This expression structure does not support differentiation","打印导数失败：": "Failed to print the derivative:","｜树=": "| tree=","数值自检有偏差，请人工核对": "Numeric self-check deviates; please verify manually","这不是二次曲线（含更高次项或非多项式）；圆锥曲线分析需要二次方程": "This is not a conic section (it has higher-degree or non-polynomial terms); conic analysis needs a quadratic equation","这不是二次曲线（没有二次项，实为直线）": "This is not a conic section (no quadratic terms; it is actually a line)","暂不支持含 xy 项的圆锥曲线（旋转情形）": "Conic sections with an xy term (rotated case) are not yet supported","退化情形：方程表示水平直线组或空集": "Degenerate case: the equation represents horizontal parallel lines or the empty set","判别式 Δ = B² − 4AC =": "Discriminant Δ = B² − 4AC =","→ 抛物线": "→ parabola","配方：(y": "Complete the square: (y","顶点：(": "Vertex: (","焦准距 p =": "Focal parameter p =","，焦点：(": ", focus: (","准线：x =": "Directrix: x =","开口方向：": "Opening direction:","向右": "Right","向左": "Left","退化情形：方程表示竖直直线组或空集": "Degenerate case: the equation represents vertical parallel lines or the empty set","配方：(x": "Complete the square: (x","准线：y =": "Directrix: y =","向上": "Up","向下": "Down","圆（椭圆的特例）": "Circle (special case of the ellipse)","中心：(": "Center: (","半轴：a =": "Semi-axis: a =","x 方向": "x direction","y 方向": "y direction","焦距 c = √(a²−b²) =": "Focal distance c = √(a²−b²) =","；离心率 e = c/a =": "; eccentricity e = c/a =","焦点：": "Focus:",") 与 (": ") and (","准线：": "Directrix:","与 x =": "and x =","与 y =": "and y =","退化情形：无实数点（虚椭圆）": "Degenerate case: no real points (imaginary ellipse)","退化情形：方程表示一个点或两条相交直线": "Degenerate case: the equation represents a point or two intersecting lines","> 0 → 双曲线": "> 0 → hyperbola","实半轴 a =": "Transverse semi-axis a =","（x 方向），虚半轴 b =": "(x direction), conjugate semi-axis b =","渐近线：y =": "Asymptotes: y =","焦点：(": "Focus: (","（y 方向），虚半轴 b =": "(y direction), conjugate semi-axis b =","焦距 c =": "Focal distance c =","双曲线": "Hyperbola","点": "Point","几何体": "Solid","曲面": "Surface","[GeoStudio] 核心引擎已就绪": "[GeoStudio] Core engine ready","未计算": "Not computed","在本视图扫描范围内无解": "No solution within the current view's scan range","全体实数 ℝ": "All real numbers ℝ","一般三角形": "General triangle","等边三角形": "Equilateral triangle","等腰直角三角形": "Isosceles right triangle","等腰三角形": "Isosceles triangle","直角三角形": "Right triangle","所有顶点都在圆上 ✓": "All vertices lie on the circle ✓","最小包围圆（部分顶点在内部）": "Minimal enclosing circle (some vertices inside)","三角形内心：r = S/s（面积 ÷ 半周长）": "Triangle incenter: r = S/s (area ÷ semiperimeter)","与各边都相切（形心即圆心）": "Tangent to all sides (centroid is the center)","近似内切圆（形心到各边最小距离）": "Approximate incircle (min distance from centroid to each side)","面积": "Area","类型判定：": "Type:","S = ½|x₁(y₂-y₃) + x₂(y₃-y₁) + x₃(y₁-y₂)|（坐标鞋带公式）": "S = ½|x₁(y₂-y₃) + x₂(y₃-y₁) + x₃(y₁-y₂)| (shoelace formula)","（圆心": "(center ","，圆心角 θ =": ", central angle θ =","（弧长 L = rθ =": "(arc length L = rθ =","定积分": "Definite integral","区间内存在无定义点，无法积分": "The interval contains an undefined point; cannot integrate","与": "and ","轴围成的面积": "-axis enclosed area","区间：": "Interval:","]，Simpson 数值积分": "], Simpson numerical integration","已解除参数绑定，该对象现在可以自由拖动": "Parameter binding released; this object can now be dragged freely","已创建": "Created","📌 吸附到": "📌 Snapped to ","平行（": "Parallel (","[GeoStudio] 平面几何引擎已就绪": "[GeoStudio] Plane geometry engine ready","棱长": "Edge length","长 a": "Length a","宽 b": "Width b","高 c": "Height c","底面半径": "Base radius","高": "Height","边数": "Sides","底边数": "Base sides","下底半径": "Bottom radius","上底半径": "Top radius","半径": "Radius","× 高": "× height","，高度可在尺寸面板调整": "; height can be adjusted in the Size panel","二面角 =": "Dihedral angle =","组合立体": "Composite solid","体积": "Volume","按": "By ","个面三角剖分 + 有向体积求和": "faces triangulated + signed-volume sum","体积 V =": "Volume V =","底面积 S = ½n r² sin(2π/n) =": "Base area S = ½n r² sin(2π/n) =","表面积": "Surface area","个面分别求面积（Newell 公式）后求和": "faces' areas (Newell formula) then summed","表面积 S =": "Surface area S =","S = 2S底 + n·边长×高": "S = 2S_base + n·side×height","斜高 l = √(r²cos²(π/n)+h²) =": "Slant height l = √(r²cos²(π/n)+h²) =","S = S底 + ½n·边长·l": "S = S_base + ½n·side·l","母线 l = √(r²+h²) =": "Slant height l = √(r²+h²) =","母线 l =": "Slant height l =","球的外接球即自身": "A sphere's circumscribed sphere is itself","球心在轴中点：R = √(r² + (h/2)²)": "Center at the axis midpoint: R = √(r² + (h/2)²)","球心在轴线上：R = (h² + r²) / (2h)": "Center on the axis: R = (h² + r²) / (2h)","球心在轴线上（两底圆都在球面上）": "Center on the axis (both base circles lie on the sphere)","所有顶点都在球面上 ✓": "All vertices lie on the sphere ✓","最小包围球（部分顶点在内部）": "Minimal enclosing sphere (some vertices inside)","内切球即自身": "A sphere's inscribed sphere is itself","与侧面、两底面都相切": "Tangent to the lateral surface and both bases","与侧面相切（离两底面有余量）": "Tangent to the lateral surface (clearance from both bases)","与两底面相切（离侧面有余量）": "Tangent to both bases (clearance from the lateral surface)","与底面、侧面都相切：r = R·h / (R + l)": "Tangent to the base and lateral surface: r = R·h / (R + l)","沿轴线的最大内切球（数值解）": "Largest inscribed sphere along the axis (numeric solution)","与所有面相切（形心即球心）": "Tangent to all faces (centroid is the center)","近似内切球（形心到各面最小距离）": "Approximate inscribed sphere (min distance from centroid to each face)","V = ⅙|AB · (AC × AD)|（混合积）": "V = ⅙|AB · (AC × AD)| (scalar triple product)","四面体体积": "Tetrahedron volume","两点距离": "Distance between two points","点到直线距离": "Distance from point to line","d = |PQ × u| / |u|（Q 在直线上，u 为方向向量）": "d = |PQ × u| / |u| (Q on the line, u the direction vector)","点到平面距离": "Distance from point to plane","平行直线距离": "Distance between parallel lines","相交（距离为 0）": "Intersecting (distance 0)","异面直线距离": "Distance between skew lines","d = |(Q₂Q₁)·(u×v)| / |u×v|（公垂线长）": "d = |(Q₂Q₁)·(u×v)| / |u×v| (common perpendicular length)","线面距离（平行）": "Line-plane distance (parallel)","直线与平面平行，取直线上一点到平面距离": "The line is parallel to the plane; use the distance from a point on the line to the plane","直线与平面相交": "The line and plane intersect","直线与平面相交，距离为 0（可计算线面角）": "The line and plane intersect; distance is 0 (the line-plane angle can be computed)","平行平面距离": "Distance between parallel planes","两平面平行，取平面 1 上一点到平面 2 的距离": "The planes are parallel; use the distance from a point on plane 1 to plane 2","两平面相交": "The two planes intersect","两平面相交，距离为 0（可计算二面角）": "The two planes intersect; distance is 0 (the dihedral angle can be computed)","二面角": "Dihedral angle","两平面平行或重合，不存在二面角": "The planes are parallel or coincident; no dihedral angle","交线上取点 Q = (": "Take point Q on the line of intersection = (","在两半平面内分别作交线的垂线，夹角即二面角": "Draw a perpendicular to the intersection line in each half-plane; the angle between them is the dihedral angle","（补角": "(supplementary angle ","°：如需另一侧角度可调整平面顶点）": "°: to get the other side's angle, adjust the plane vertices)","高度 h =": "Height h =","（松手生成）": "(release to create)","高度 z =": "Height z =","已解除参数绑定，该点现在可以自由拖动": "Parameter binding released; this point can now be dragged freely","位置 (": "Position (","[GeoStudio] 立体几何引擎已就绪": "[GeoStudio] Solid geometry engine ready","滚轮缩放 · 拖拽平移 · 连续点选可多选 · 拖顶点调整": "Scroll to zoom · drag to pan · click repeatedly to multi-select · drag vertices to adjust","拖拽旋转 · 滚轮缩放 · 点选函数/几何体后拖动可移动（Ctrl 调高度）": "Drag to rotate · scroll to zoom · select a function/solid then drag to move (Ctrl to adjust height)","支持 <code>y=f(x)</code>、<code>x=g(y)</code>、隐式方程 <code>F(x,y)=0</code>、极坐标 <code>r=f(θ)</code>、参数方程 <code>x=cos(t), y=sin(t)</code>、虚数模式 <code>e^(i*t)</code>": "Supports <code>y=f(x)</code>, <code>x=g(y)</code>, implicit equations <code>F(x,y)=0</code>, polar coordinates <code>r=f(θ)</code>, parametric equations <code>x=cos(t), y=sin(t)</code>, and imaginary mode <code>e^(i*t)</code>","输入含 x 与 y 的表达式自动绘制曲面（z=0 平面上的曲线同样支持），例如 <code>z = a*sin(x)*cos(y)</code>": "Enter an expression containing x and y to plot a surface automatically (curves on the z=0 plane are also supported), e.g. <code>z = a*sin(x)*cos(y)</code>","点击左侧「几何体」创建图形，或从「示例」菜单加载场景": "Click \"Solid\" on the left to create a figure, or load a scene from the \"Examples\" menu","数量已达上限（最多": "Object limit reached (max ","个），请先删除部分对象": "); please delete some objects first","曲面表达式需要包含 x 或 y": "A surface expression must contain x or y","已添加": "Added","复数恒等式验证": "Complex identity verification","恒等式：": "Identity:","左边 =": "Left side =","（实部": "(real part ","，虚部": ", imaginary part ","右边 =": "Right side =","✓ 恒等式成立，两边之差为": "✓ Identity holds; the difference between the two sides is","（浮点误差级）": "(floating-point error level)","✗ 两边不相等，差 =": "✗ The two sides are not equal; difference =","蓝点标出了左边的值在复平面上的位置": "The blue dot marks the left side's value on the complex plane","恒等式成立": "Identity holds","两边不相等": "The two sides are not equal","复数求值失败（可能超出数值范围）": "Complex evaluation failed (possibly out of numeric range)","复数点": "Complex point","实部": "Real part","模 |z| =": "Modulus |z| =","，辐角 arg z =": ", argument arg z =","已作为点画在复平面上（实部作 x 轴、虚部作 y 轴）": "Drawn as a point on the complex plane (real part on the x-axis, imaginary part on the y-axis)","已添加复数点": "Complex point added","坐标中含有无法求值的量": "Coordinates contain a value that cannot be evaluated","已添加点": "Point added","（随参数联动）": "(linked to parameters)","分量中含有无法求值的量": "Components contain a value that cannot be evaluated","已添加向量": "Vector added","已创建抛物线，可拖动窗口或直接输入改写": "Parabola created; drag the window or edit the input directly","，选中后可调尺寸与体积": "; once selected, adjust size and volume","已创建空间点": "Space point created","，拖动即可移动": "; drag to move","已创建线段": "Segment created","（拖动两端点调整）": "(drag the endpoints to adjust)","已创建直线（拖动两个控制点调整方向）": "Line created (drag the two control points to adjust direction)","已创建平面": "Plane created","（拖动三个顶点调整姿态）": "(drag the three vertices to adjust orientation)","方程": "Equation","极坐标": "Polar coordinates","参数方程": "Parametric equation","区域": "Region","命题": "Proposition","含参点": "Parametric point","含参向量": "Parametric vector","自动合成": "Auto-compose","已重命名为": "Renamed to ","范围无效：最小值需小于最大值": "Invalid range: the minimum must be less than the maximum","的滑块范围已设为": "'s slider range has been set to ","宽": "Width","棱数": "Edges","长": "Length","底面外接圆半径": "Base circumradius","棱数（3-24）": "Edges (3-24)","底面边数（3-24）": "Base sides (3-24)","按步幅": "In multiples of the step","的整数倍调整": "multiples of the step","自由调整": "Free adjustment","不存在": "Does not exist","修改": "Edit","的表达式，回车确认（Esc 取消）": "the expression; press Enter to confirm (Esc to cancel)","正在修改": "Editing","：回车确认，Esc 取消": ": press Enter to confirm, Esc to cancel","表达式不能为空（Esc 可取消修改）": "The expression cannot be empty (Esc to cancel the edit)","已更新": "Updated","坐标": "Coordinates","所属": "Belongs to","的顶点": "'s vertices","几何体顶点": "Solid vertices","提示": "Tip","点击选中可继续多点连线 / 定平面 / 建系；拖动会移动整个几何体": "Click to select and continue multi-point connection / plane definition / coordinate setup; dragging moves the whole solid","到原点距离": "Distance to origin","联动": "Linked","随参数自动联动（手动改坐标会解除绑定）": "Auto-linked to parameters (editing coordinates manually releases the binding)","拖动移动；Ctrl 拖动调高度": "Drag to move; Ctrl-drag to adjust height","拖动即可移动": "Drag to move","分量": "Components","模 |": "Modulus |","起点": "Start","方向角": "Direction angle","随参数自动变化": "Changes automatically with parameters","长度": "Length","中点": "Midpoint","斜率": "Slope","不存在（竖直）": "Does not exist (vertical)","斜率 k": "Slope k","倾斜角 α": "Inclination angle α","方向向量": "Direction vector","顶点数": "Vertex count","周长": "Perimeter","类型判定": "Type","三边": "Sides","圆心": "Center","半径 r": "Radius r","中心": "Center","半轴 a / b": "Semi-axes a / b","焦距 c": "Focal distance c","离心率 e": "Eccentricity e","圆心角": "Central angle","弧长": "Arc length","表达式": "Expression","与 y 轴交点": "y-axis intersections","与 x 轴交点": "x-axis intersections","视口内无": "None in viewport","θ 范围": "θ range","0 至 2π": "0 to 2π","t 范围": "t range","-2π 至 2π": "-2π to 2π","类型": "Type","二元不等式 · 区域填充": "Two-variable inequality · region fill","判定": "Test","满足 F(x, y)": "Points satisfying F(x, y)","0 的点集": "0 point set","边界": "Boundary","虚线为 F(x, y) = 0": "Dashed line is F(x, y) = 0","一元不等式": "One-variable inequality","解集": "Solution set","临界点": "Critical points","说明": "Note","数值解集，随参数实时更新（": "Numeric solution set, updated in real time with parameters (","含端点": "inclusive","不含端点": "exclusive","绘制范围": "Plot range","高度限制": "Height limit","过点": "Through point","法向量": "Normal vector","平面方程": "Plane equation","三点共线": "Points are collinear","球心 x": "Center x","球心 y": "Center y","球心 z": "Center z","位置 x": "Position x","位置 y": "Position y","高度 z": "Height z","组成": "Composition","个顶点 ·": "vertices · ","个面（组合立体）": "faces (composite solid)","旋转 ∠x": "Rotate ∠x","旋转 ∠y": "Rotate ∠y","旋转 ∠z": "Rotate ∠z","名称": "Name","关系": "Relationship","夹角": "Angle","数量积": "Dot product","叉积 |u×v|": "Cross product |u×v|","求面积": "Find area","围成面积": "Enclosed area","极值与单调": "Extrema and monotonicity","求体积": "Find volume","求表面积": "Find surface area","外接球": "Circumscribed sphere","内切球": "Inscribed sphere","外接圆": "Circumscribed circle","内切圆": "Inscribed circle","以此点建系": "Set up coordinates from this point","删除": "Delete","连接两点": "Connect two points","连成折线（按顺序）": "Connect into a polyline (in order)","连成多边形": "Connect into a polygon","构成平面（闭合环）": "Form a plane (closed loop)","三点定平面": "Define a plane from three points","求角的三角值": "Find the angle's trig values","组合成立体（封闭校验＋体积）": "Combine into a solid (closure check + volume)","过点切线": "Tangent through a point","求距离": "Find distance","求二面角": "Find dihedral angle","删除几何体": "Delete solid","取消选择": "Clear selection","这个组合暂时不支持计算": "This combination is not yet supported","无法计算": "Cannot compute","求导仅支持 y = f(x) 形式的函数曲线": "Differentiation only supports function curves of the form y = f(x)","求导失败：": "Differentiation failed:","（幂函数、和差积商、复合函数链式法则自动应用，结果已数值校验）": "(power rule, sum/difference/product/quotient, and chain rule applied automatically; the result is numerically verified)","注意：": "Note:","导数 f′(x)": "Derivative f′(x)","极值分析仅支持 y = f(x) 形式的函数": "Extrema analysis only supports functions of the form y = f(x)","单调性与极值": "Monotonicity and extrema","f′(x) 在当前视口内无零点 →": "f′(x) has no zeros in the current viewport →","单调递增": "Increasing","单调递减": "Decreasing","导数恒为 0": "Derivative is always 0","（视口范围内）": "(within the viewport)","极大值": "Local maximum","极小值": "Local minimum","：f′ 由": ": f′ changes from ","正": "positive","负": "negative","变": "to","点 (": "point (","：f′ 两侧同号 → 不是极值点": ": f′ has the same sign on both sides → not an extremum","增": "increasing","减": "decreasing","单调性（视口内）：": "Monotonicity (within viewport):","切线目前支持 y = f(x) 形式的函数": "Tangents currently support functions of the form y = f(x)","斜率 k = f′(": "Slope k = f′(","斜率 k ≈": "Slope k ≈","（数值差分）": "(numeric difference)","该点导数不存在，无法作切线": "The derivative does not exist at this point; cannot draw a tangent","切点：(": "Point of tangency: (","切线方程：y =": "Tangent equation: y =","（切线已画到画布，可拖动其两个控制点调整）": "(the tangent is drawn on the canvas; drag its two control points to adjust)","请同时选中一个点与一条曲线": "Select both a point and a curve","该点不在曲线上（相差": "The point is not on the curve (off by ","），请先拖到曲线上": "); drag it onto the curve first","该点不在曲线上，请先拖到曲线附近": "The point is not on the curve; drag it near the curve first","法向量（梯度）≈ (": "Normal vector (gradient) ≈ (","切线方程：": "Tangent equation:","（切线已画到画布，可拖动控制点调整）": "(the tangent is drawn on the canvas; drag the control points to adjust)","切线（隐式曲线 / 圆锥曲线）": "Tangent (implicit curve / conic section)","请选中一条直线/线段和一条曲线": "Select a line/segment and a curve","视口内交点不足两个，无法求弦长（可把视图拉远）": "Fewer than two intersections in the viewport; cannot compute the chord length (zoom out)","交点 A：(": "Intersection A: (","交点 B：(": "Intersection B: (","弦长 =": "Chord length =","暂不支持该对象类型": "This object type is not yet supported","识别结果：": "Result:","圆锥曲线分析 ·": "Conic section analysis ·","无法计算（请选中一个几何体）": "Cannot compute (select a solid)","半径 r =": "Radius r =","球心 (": "Sphere center (",")（已标注为点": ") (marked as a point","验证：": "Verification:","个顶点在球面上": "vertices on the sphere","已生成「": "Generated \"","」，可整体拖动 / 改色 / 删除；点两次撤销可还原": "\"; can be dragged / recolored / deleted as a whole; press undo twice to restore","球心捕手": "Sphere Center Catcher","已生成": "Generated","至少需要 3 个顶点": "At least 3 vertices required","无法计算（顶点可能共线）": "Cannot compute (vertices may be collinear)","圆心 (": "Circle center (","个顶点在圆上": "vertices on the circle","已连接": "Connected","已连成折线（": "Connected into a polyline (","段）": "segments)","已连成多边形": "Connected into a polygon","至少需要三条线段才能构成平面": "At least three segments are needed to form a plane","未组成闭合环：每个顶点需恰好连接 2 条边": "Not a closed loop: each vertex must connect to exactly 2 edges","未能走出完整闭环（可能有分支或断点）": "Could not trace a complete closed loop (there may be a branch or break)","面": "plane","已构成平面": "Plane formed","三个点需要两两不同": "The three points must be pairwise distinct","的三角值": "'s trig values","角的顶点：": "Angle vertex:","（按选择顺序取中间点）": "(takes the middle point in selection order)","x 轴方向（输入两点名，如 AB 表示 A→B）：": "x-axis direction (enter two point names, e.g. AB means A→B):","y 轴方向（输入两点名，如 AC；留空按右手系自动补齐）：": "y-axis direction (enter two point names, e.g. AC; leave blank for a right-handed system):","至少需要一个有效方向（两个点名，如 AB）": "At least one valid direction is needed (two point names, e.g. AB)","x 与 y 方向不能共线，换一组点再试": "The x and y directions cannot be collinear; try a different pair of points","当前场景没有可变换的对象": "There are no transformable objects in the current scene","已建系：": "Coordinates set up:","移到原点、x 轴对齐世界 x 轴": "moved to the origin, x-axis aligned with world x-axis","（函数 / 曲面不参与变换）": "(functions / surfaces are not transformed)","至少需要 4 个面才能组合": "At least 4 planes are needed to combine","面缺少有效顶点": "A plane is missing valid vertices","未构成封闭立体：有": "Not a closed solid: there are ","条边不满足「恰好被 2 个面共享」（顶点容差": "edges that are not \"shared by exactly 2 planes\" (vertex tolerance ","组合体": "Composite","组合立体 · 封闭校验通过": "Composite solid · closure check passed","面数：": "Planes:","，边数：": ", edges:","（每条边恰好被 2 个面共享 ✓；顶点容差": "(each edge is shared by exactly 2 planes ✓; vertex tolerance ","已生成可整体移动 / 旋转 / 改色 / 删除的几何体（撤销可还原原面）": "Generated a solid that can be moved / rotated / recolored / deleted as a whole (undo restores the original planes)","造物主": "Creator","已组合成": "Combined into ","：可整体移动 / 改色 / 删除": ": can be moved / recolored / deleted as a whole","结果已复制": "Result copied","复制失败，可手动选择文本": "Copy failed; select the text manually","当前环境不支持自动复制": "Automatic copy is not supported in this environment","已把导数曲线画到画布": "Derivative curve drawn on the canvas","已标出": "Marked ","个极值点": "extrema","直线的斜率与倾斜角": "Slope and inclination of a line","含参二次函数": "Quadratic with parameters","三角函数图像": "Trigonometric graph","椭圆与离心率": "Ellipse and eccentricity","圆与直线相交": "Circle intersecting a line","不等式区域：y ≥ x² - a": "Inequality region: y ≥ x² - a","一元不等式解集：x² - a > 0": "One-variable inequality solution set: x² - a > 0","向量关系实验室": "Vector Relationship Lab","参数方程：李萨如曲线": "Parametric equation: Lissajous curve","🌀 欧拉公式：e^(iθ) 单位圆": "🌀 Euler's formula: e^(iθ) unit circle","欧拉公式：e^(iθ) = cos θ + i·sin θ，复平面上的单位圆": "Euler's formula: e^(iθ) = cos θ + i·sin θ, the unit circle on the complex plane","🌀 欧拉恒等式：e^(iπ) + 1 = 0": "🌀 Euler's identity: e^(iπ) + 1 = 0","正方体与体对角线": "Cube and space diagonal","圆锥与体积": "Cone and volume","二面角演示": "Dihedral angle demo","交线AB": "Intersection line AB","曲面 z = a·sin(x)·cos(y)": "Surface z = a·sin(x)·cos(y)","预设加载失败：": "Failed to load preset:","已加载预设：": "Preset loaded:","没有可撤销的操作": "Nothing to undo","已撤销": "Undone","没有可重做的操作": "Nothing to redo","已重做": "Redone","可重建描述": "Description can be rebuilt","已取消修改": "Edit canceled","几何体标点随几何体联动，不能单独删除（删除几何体会连带移除）": "A solid's marked points move with it and cannot be deleted separately (deleting the solid removes them too)","已删除": "Deleted","✏ 拖拽新建中…": "✏ Drag-creating…","拖拽新建已开启：拖出尺寸框松手生成；拖拽中按住 Shift 上下移动可调高度": "Drag-create on: drag out a size box and release to create; while dragging, hold Shift and move up/down to adjust height","拖拽新建已关闭": "Drag-create off","已切换到固定视图：拖拽仅调整允许方向，旋转已锁定": "Switched to a fixed view: dragging only adjusts allowed directions; rotation is locked","已回到自由视角（恢复之前的视角）": "Back to free view (previous view restored)","展开": "Expand","收起": "Collapse","输入面板（纯净模式）": "Input panel (Clean mode)","读数面板（纯净模式）": "Readout panel (Clean mode)","🎦 退出纯净": "🎦 Exit Clean","纯净模式：画布已铺满（点边缘「输入 / 读数」把手可展开面板，Esc 退出全屏）": "Clean mode: the canvas fills the screen (click the \"Input / Readout\" handles at the edge to expand the panels, Esc to exit fullscreen)","已退出纯净模式，两侧面板已恢复": "Exited Clean mode; both side panels restored","几何工坊预设-": "Geometry-Studio-preset-","给这份预设起个名字（如：二面角-正方体），保存为「名字-日期.json」：": "Give this preset a name (e.g. dihedral-cube); it will be saved as \"name-date.json\":","，含涂鸦批注": ", with doodle annotations","笔": "Pen","已导出「": "Exported \"","个对象": "objects","，含解析卡": ", with analysis card","导出失败：": "Export failed:","导入将替换当前场景（当前": "Import will replace the current scene (currently ","个对象，文件里": "objects; the file has ","个对象）。\\n\\n建议先点「导出预设」备份当前内容。\\n\\n继续导入？": "objects).\\n\\nConsider clicking \"Export preset\" to back up the current content first.\\n\\nContinue importing?","文件格式不正确": "Invalid file format","预设导入成功": "Preset imported successfully","导入失败：": "Import failed:","涂鸦已清空（仅清涂鸦层）": "Doodle cleared (only the doodle layer)","只读模式：涂鸦已禁用（仍可用滚轮 / 双指调整视角）": "Read-only mode: doodling disabled (you can still scroll / pinch to adjust the view)","笔迹较多，超出本机存储限额的旧数据未能保存（当前会话内仍可继续画）": "Many strokes; older data that exceeds the local storage limit could not be saved (you can keep drawing this session)","Alt+滚轮旋转视角": "Alt+scroll to rotate the view","滚轮缩放": "Scroll to zoom","涂鸦模式：": "Doodle mode:","（画笔不受影响）": "(the brush is unaffected)","🖊 结束涂鸦": "🖊 End doodle","涂鸦层已开启：随手画；滚轮缩放、Alt+滚轮旋转视角（不会画出笔迹）": "Doodle layer on: draw freely; scroll to zoom, Alt+scroll to rotate the view (no strokes will be drawn)","涂鸦层已关闭（内容仍保留）": "Doodle layer off (content is kept)","🔓 退出只读": "🔓 Exit read-only","已进入只读模式：仅可查看与平移缩放": "Entered read-only mode: you can only view and pan/zoom","已退出只读模式": "Exited read-only mode","精度已切换为": "Precision switched to ","位小数": "decimal places","（自定义）": "(custom)","自定义步幅（正数，例如 0.25 或 3）：": "Custom step (a positive number, e.g. 0.25 or 3):","步幅需为正数，已保持原值": "The step must be a positive number; the original value was kept","步幅：无限制（自由拖动）": "Step: unlimited (free dragging)","步幅已设为": "Step set to ","的整数倍": " × integer","几何工坊-": "Geometry-Studio-","已导出 PNG 图片": "PNG image exported","当前模式已经是空的": "The current mode is already empty","已清空当前模式的": "Cleared the current mode's ","视距": "view distance","已选择": "Selected ","个对象；点空白处可清空重选": "objects; click empty space to clear and reselect","已恢复上次的场景（按 Ctrl+Z 可撤销修改）": "Restored the previous scene (press Ctrl+Z to undo changes)","欢迎使用几何工坊，拖动右侧滑块试试实时联动": "Welcome to Geometry Studio; drag the slider on the right to try real-time linking","[GeoStudio] 工作台 UI 已就绪": "[GeoStudio] Workbench UI ready","QQ 号已复制：": "QQ number copied:","复制失败，QQ 号：": "Copy failed, QQ number:","QQ 号：": "QQ number:","[GeoStudio] 落地页交互已就绪": "[GeoStudio] Landing page interactions ready","已接入 DeepSeek": "DeepSeek connected","尚未设置 API Key：点右上角 🔑 填入 DeepSeek Key（只存本机）": "No API Key set yet: click 🔑 in the top-right to enter your DeepSeek Key (stored locally only)","API Key 无效或已过期（401），请点 🔑 重新填写": "API Key invalid or expired (401); click 🔑 to re-enter it","账户余额不足（402），请到 DeepSeek 平台充值后再试": "Insufficient account balance (402); top up on the DeepSeek platform and try again","请求过于频繁（429），请稍等片刻再试": "Too many requests (429); please wait a moment and try again","服务繁忙（503），请稍后重试": "Service busy (503); try again later","API 错误": "API error","AI 返回的内容无法解析成图形（已自动重试），请换个说法或勾选「深度思考」再试": "The AI's response could not be parsed into a figure (retried automatically); rephrase or check \"Deep thinking\" and try again","请求超时（": "Request timed out (","秒）或已取消": "s) or canceled","网络请求失败：请检查网络（API 需联网访问）": "Network request failed: check your connection (the API needs internet access)","AI 识别为": "AI recognized as ","立体": "solid ","几何题，已自动切换模式": "geometry problem - mode switched automatically","以所选顶点的最小包围球": "Minimal enclosing sphere of the selected vertices","已建造": "Built","（立体几何）": "(solid geometry)","（平面几何）": "(plane geometry)","，可拖动调整、继续测算": "; drag to adjust and keep measuring","✦ 答案：": "✦ Answer:","✨ AI 解析 ·": "✨ AI analysis ·","先在上方输入一道题目吧": "Enter a problem above first","取消建造": "Cancel build","已取消建造：场景已恢复到操作前": "Build canceled: the scene was restored to before the operation","已取消分析": "Analysis canceled","深度思考中（DeepSeek V4）…已用": "Deep thinking (DeepSeek V4)… elapsed ","s，复杂题可能需要 1~3 分钟（点「取消建造」可中止）": "s; complex problems may take 1-3 minutes (click \"Cancel build\" to stop)","正在分析题目…已用": "Analyzing the problem… elapsed ","深度思考中（DeepSeek V4）…": "Deep thinking (DeepSeek V4)…","正在分析题目…": "Analyzing the problem…","题目解析完成，正在建造图形…": "Problem analyzed; building the figure…","正在建造图形…（": "Building the figure… (","），点「取消建造」可中止": "); click \"Cancel build\" to stop","AI 造物": "AI creation","✨ 完成！已建造": "✨ Done! Built ","个对象（": "objects (","s），解析卡可查看完整推导与答案": "s); the analysis card shows the full derivation and answer","请输入有效的 Key": "Enter a valid Key","API Key 已保存（仅存本机浏览器）": "API Key saved (local browser only)","🏆 成就解锁：": "🏆 Achievement unlocked: ","几何学徒": "Geometry Apprentice","[GeoStudio] AI 出图模块已就绪": "[GeoStudio] AI figure module ready","麦克风权限被拒绝。点浏览器地址栏左侧的锁形图标 → 站点权限 → 把「麦克风」改为「允许」，再点一次语音输入。也可以直接手动打字，功能不受影响。": "Microphone permission denied. Click the lock icon on the left of the browser's address bar → Site permissions → change \"Microphone\" to \"Allow\", then click Voice input again. You can also just type manually; the feature is unaffected.","浏览器拒绝了语音服务（站点权限或平台策略）。请在浏览器设置里允许麦克风，或直接手动输入。": "The browser blocked the speech service (site permission or platform policy). Allow the microphone in your browser settings, or type manually.","语音识别服务连不上（网络波动，或本地文件方式打开受限）。可直接手动输入；若常用此功能，建议用在线版 geometry.startian.top。": "Cannot reach the speech recognition service (network issues, or restrictions when opened as a local file). You can type manually; if you use this feature often, try the online version at geometry.startian.top.","没有检测到可用的麦克风。请检查耳麦连接，以及系统「设置 → 声音 → 输入」里的默认设备。": "No usable microphone detected. Check the headset connection and the default device in your system's \"Settings → Sound → Input\".","没听见声音。靠近麦克风再说一次？也可以直接打字。": "Didn't hear anything. Move closer to the microphone and say it again? You can also just type.","已取消语音输入。": "Voice input canceled.","当前浏览器不支持中文语音识别。": "This browser does not support Chinese speech recognition.","🎤 正在听": "🎤 Listening","启动中…": "Starting…","正在听…点我停下": "Listening… click to stop","识别中…": "Recognizing…","浏览器不支持": "Browser not supported","（继续听你说…）": "(still listening…)","（请说题目…）": "(please say the problem…)","当前浏览器不支持语音识别（Web Speech API）。建议使用最新版 Edge / Chrome，或直接手动输入。": "This browser does not support speech recognition (Web Speech API). Use the latest Edge / Chrome, or type manually.","提示：本地文件方式打开的页面，语音识别可能受限。正在尝试启动，若": "Note: speech recognition may be limited on pages opened as local files. Trying to start; if ","秒内没有反应，请改用在线版 geometry.startian.top。": "seconds pass with no response, switch to the online version at geometry.startian.top.","语音识别初始化失败：": "Speech recognition initialization failed:","识别出错（": "Recognition error (","）。可以直接手动输入。": "). You can type manually.","语音服务没有响应（本地文件方式打开时常见）。建议改用在线版 geometry.startian.top，或直接手动输入。": "The speech service is not responding (common when opened as a local file). Try the online version at geometry.startian.top, or type manually.","语音服务没有响应。可能是网络或系统语音服务问题，请稍后重试，或直接手动输入。": "The speech service is not responding. This may be a network or system speech service issue; try again later or type manually.","无法启动语音识别：": "Cannot start speech recognition:","。可以直接手动输入。": ". You can type manually.","没听清内容（可能声音太小或太远）。再点一次语音输入试试，或直接打字。": "Didn't catch that (maybe too quiet or too far). Click Voice input again, or just type.","等了一会儿没听到声音，已停止。可以再试一次，或直接打字。": "Waited a while and heard nothing; stopped. Try again, or just type.","单次语音最长为": "A single voice input lasts at most ","秒，已自动收尾。可以分几次说，或直接打字。": "seconds and was wrapped up automatically. Say it in several parts, or just type.","没听清内容。再点一次语音输入试试，或直接打字。": "Didn't catch that. Click Voice input again, or just type.","✓ 已": "✓ ","追加到": "appended to ","填入": "filled into ","输入框（识别": "input box (recognized ","秒），可以直接编辑。": "s); you can edit it directly.","已改用识别原文（未做数学转换），可直接编辑。": "Switched to the raw transcript (no math conversion); you can edit it directly.","当前浏览器不支持语音识别": "This browser does not support speech recognition","📜 找到一篇日志（去主页头像连点 7 下看全文）": "📜 Found a log entry (click the homepage avatar 7 times to read it in full)","📜 数学比我会表达……（找到一篇日志 · 几何工坊）": "📜 Math expresses it better than I can… (found a log entry · Geometry Studio)","复数不能比较大小（不支持": "Complex numbers cannot be compared (","输入含 x 与 y 的表达式自动绘制曲面（z=0 平面上的曲线同样支持），例如": "Enter an expression containing x and y to plot a surface automatically (curves on the z=0 plane are also supported), e.g. ","暂无对象，从上方输入或点击图形创建": "No objects yet - enter one above or click a shape to create","自定义滑块范围（默认 -10 ~ 10）": "Custom slider range (default -10 ~ 10)","范围": "Range","确定": "OK","尺寸（可编辑）": "Size (editable)","拖动滑杆或输入精确值；开启步幅时仅按步幅整数倍调整": "Drag the slider or type an exact value; with step enabled it only adjusts by integer multiples of the step","调整夹角（": "Adjust angle (","夹角 °": "Angle °","；第二条线段绕自身起点旋转": "; the second segment rotates around its own start point","颜色": "Color","空间变换 · 移动与旋转": "Spatial transform · Move & rotate","重置变换": "Reset transform","画布上先点选，再拖动即可平移；Ctrl 拖动调高度": "On the canvas, select first, then drag to pan; Ctrl-drag to adjust height","点选对象查看坐标与性质；连续点选两个对象可做计算（如两个平面求二面角），点空白处清空": "Click an object to see its coordinates and properties; click two objects in turn to compute (e.g. two planes for a dihedral angle); click empty space to clear","已选": "Selected ","个 · 继续点选可多选，点空白处清空": " · keep clicking to multi-select; click empty space to clear","向量关系判定": "Vector relation detection","点选对象后这里出现计算按钮：几何体 → 体积 / 表面积；两个平面 → 二面角；两条线或线面 → 距离": "After selecting an object, compute buttons appear here: solid → volume / surface area; two planes → dihedral angle; two lines or a line and a plane → distance","复制结果": "Copy result","关闭": "Close","把 f′(x) 画到画布": "Plot f′(x) on the canvas","在图上标出极值点": "Mark the extrema on the graph","重新计算": "Recalculate","区间": "Interval","应用": "Apply","预设场景": "Preset scenes","滚轮缩放 · Alt+滚轮旋转": "Scroll to zoom · Alt+scroll to rotate","橡皮": "Eraser","小于→<": "Less than → <","已自动转换：": "Auto-converted: ","识别原文：": "Raw transcript: ","y > x^2、x^2 + y^2 ≤ 4（画区域）；x^2 - a > 0（求一元解集）；支持": "y > x^2, x^2 + y^2 ≤ 4 (draw regions); x^2 - a > 0 (solve a one-variable solution set); supports ","≤ ≥ ≠ 与": "≤ ≥ ≠ and "});
+I18N.auto();
+/* ==== i18n-kit v1.2 end ==== */
+</script>
 
 <script>
 /* 运行时错误收集（调试用，可在控制台查看 window.__errs） */
