@@ -11298,5 +11298,52 @@ console.log('[GeoStudio] 落地页交互已就绪');
 })();
 
 </script>
+<script>/*st-pt-tracker*/
+(function () {
+  'use strict';
+  try {
+    var PROJ = 'geometry';
+    var host = location.hostname;
+    if (host !== 'startian.top' && !/\.startian\.top$/.test(host)) return;
+    var KEY = 'st_pt', DOMAIN = '.startian.top';
+    var last = Date.now();
+    function readMap() {
+      var m = {};
+      try {
+        var parts = document.cookie.split(';');
+        for (var i = 0; i < parts.length; i++) {
+          var p = parts[i].trim();
+          if (p.indexOf(KEY + '=') === 0) {
+            decodeURIComponent(p.slice(KEY.length + 1)).split('&').forEach(function (kv) {
+              var a = kv.split('=');
+              if (a[0]) m[a[0]] = parseInt(a[1], 10) || 0;
+            });
+            break;
+          }
+        }
+      } catch (e) {}
+      return m;
+    }
+    function flush() {
+      var now = Date.now();
+      var delta = Math.round((now - last) / 1000);
+      last = now;
+      if (delta < 5 || delta > 3600) return;
+      var m = readMap();
+      m[PROJ] = Math.min(99999999, (m[PROJ] || 0) + delta);
+      var out = [];
+      for (var k in m) out.push(k + '=' + m[k]);
+      try {
+        document.cookie = KEY + '=' + encodeURIComponent(out.join('&')) + '; domain=' + DOMAIN + '; path=/; max-age=63072000; SameSite=Lax';
+      } catch (e) {}
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') flush();
+      else last = Date.now();
+    });
+    window.addEventListener('pagehide', flush);
+    setInterval(function () { if (document.visibilityState === 'visible') flush(); }, 30000);
+  } catch (e) {}
+})();</script>
 </body>
 </html>
