@@ -7000,35 +7000,82 @@ console.log('[GeoStudio] 落地页交互已就绪');
 @media print{#stCredit{display:none}}
 </style>
 <script>
-/* credit-guard · 署名守卫（MIT 要求）—— 保留本段与署名徽章 */
+/* credit-guard · 署名守卫（MIT）—— 保留本段与右下角署名徽章
+   行为：① 控制台品牌 banner ② 缺署名时控制台警告
+        ③ 非本站域名 + 缺署名 → 页面顶部显示横幅（访客可见） */
 (function () {
   'use strict';
   var HOME = 'https://startian.top';
-  var LIC = 'https://github.com/Estheria-star/geometry/blob/main/LICENSE';
+  var LIC = 'https://github.com/Estheria-star/Estheria-star.github.io/blob/main/LICENSE';
+  var TAG = 'startian-mit';
+  var MINE = /(^|\.)startian\.top$/i;   /* 自家域名只 warn，不弹横幅 */
+
   try {
     console.log('%c 星恬的小站 %c startian.top ',
       'background:linear-gradient(135deg,#89C2FF,#5A9FE0);color:#fff;font:800 12px/1.9 system-ui;border-radius:6px 0 0 6px;padding:2px 10px',
       'background:#EAF4FF;color:#2C4A6B;font:700 12px/1.9 system-ui;border-radius:0 6px 6px 0;padding:2px 10px');
-    console.log('%c© 2026 Startian (星恬 / Estheria-star) · MIT License · ' + HOME,
+    console.log('%c© 2026 Startian (星恬 / Estheria-star) · MIT · ' + HOME,
       'color:#7A97B2;font:500 11.5px/1.8 system-ui');
   } catch (e) {}
-  function check() {
+
+  function missing() {
     var el = document.getElementById('stCredit');
-    if (el && el.getAttribute('data-credit') === 'startian-mit') return;
+    if (!el) return true;
+    if (el.getAttribute('data-credit') === TAG) return false;
+    var txt = el.textContent || '';
+    return !(/MIT|GPL/i.test(txt) && /startian|星恬|estheria/i.test(txt));
+  }
+
+  function bar() {
+    try {
+      if (document.getElementById('stCreditBar')) return;
+      var wrap = document.createElement('div');
+      wrap.id = 'stCreditBar';
+      wrap.innerHTML =
+        '<span class="scb-ico">📄</span>' +
+        '<span class="scb-txt">本页面基于 <b>「星恬的小站」</b>的开源项目构建，未检测到原项目的署名声明。' +
+        '<em>MIT 许可证要求在使用与分发时保留版权声明。</em></span>' +
+        '<a class="scb-link" href="' + HOME + '" target="_blank" rel="noopener">查看来源</a>' +
+        '<button class="scb-x" type="button" aria-label="关闭">✕</button>';
+      var css = document.createElement('style');
+      css.textContent =
+        '#stCreditBar{position:fixed;left:0;right:0;top:0;z-index:2147483000;display:flex;align-items:center;gap:10px;' +
+        'padding:9px 14px;background:linear-gradient(90deg,#B4651F,#D08A2E);color:#fff;' +
+        'font:600 13px/1.55 system-ui,-apple-system,"Microsoft YaHei",sans-serif;' +
+        'box-shadow:0 6px 22px rgba(0,0,0,.22)}' +
+        '#stCreditBar .scb-ico{font-size:15px;opacity:.95}' +
+        '#stCreditBar .scb-txt{flex:1;min-width:0}' +
+        '#stCreditBar b{font-weight:800}' +
+        '#stCreditBar em{font-style:normal;opacity:.86;margin-left:6px}' +
+        '#stCreditBar .scb-link{color:#fff;text-decoration:underline;white-space:nowrap;opacity:.95;font-weight:800}' +
+        '#stCreditBar .scb-x{border:0;background:rgba(255,255,255,.18);color:#fff;width:24px;height:24px;' +
+        'border-radius:7px;cursor:pointer;font-size:12px;line-height:1}' +
+        '#stCreditBar .scb-x:hover{background:rgba(255,255,255,.3)}' +
+        '@media(max-width:640px){#stCreditBar{font-size:12px;padding:8px 10px}#stCreditBar em{display:none}}';
+      (document.head || document.documentElement).appendChild(css);
+      (document.body || document.documentElement).appendChild(wrap);
+      wrap.querySelector('.scb-x').addEventListener('click', function () { wrap.remove(); });
+    } catch (e) {}
+  }
+
+  function check() {
+    if (!missing()) return;
     try {
       console.warn('%c⚠ 署名声明缺失 / CREDIT NOTICE MISSING',
         'background:#C0392B;color:#fff;font:900 13px/2 system-ui;border-radius:6px;padding:2px 12px');
-      console.warn('%c这个页面基于「星恬的小站」构建（' + HOME + '），以 MIT 许可证发布。\n\n' +
-        'MIT 要求：分发或部署的任何副本都要保留原版权声明，并在页面可见处注明来源。\n\n' +
-        '请补上一枚署名后继续使用：\n' +
-        '    Based on <a href="' + HOME + '">星恬的小站</a> © 2026 Startian · MIT\n\n' +
+      console.warn('%c这个页面基于「星恬的小站」构建（' + HOME + '），以 MIT 发布。\\n\\n' +
+        'MIT 许可证要求在使用与分发时保留版权声明。\\n\\n' +
+        '请补上一枚署名后继续使用：\\n' +
+        '    Based on <a href="' + HOME + '">星恬的小站</a> © 2026 Startian · MIT\\n\\n' +
         '完整许可：' + LIC,
         'color:#8A5A00;font:500 12.5px/1.9 system-ui;white-space:pre-wrap');
     } catch (e) {}
+    if (!MINE.test(location.hostname)) bar();
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { setTimeout(check, 400); });
-  } else { setTimeout(check, 400); }
+
+  function run() { setTimeout(check, 500); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
 })();
 </script>
 </body>
