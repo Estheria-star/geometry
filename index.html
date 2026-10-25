@@ -7078,5 +7078,25 @@ console.log('[GeoStudio] 落地页交互已就绪');
   else run();
 })();
 </script>
+
+<script>
+/* 离线缓存：本站自己的 sw.js（scope=/）
+   · 首次访问自动注册，之后断网也能打开
+   · 跳过：地址后加 ?nosw=1 */
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  var ok = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (!ok) return;
+  if (location.search.indexOf('nosw=1') >= 0) {
+    navigator.serviceWorker.getRegistrations().then(function (rs) {
+      rs.forEach(function (r) { r.unregister(); });
+    }).catch(function () {});
+    return;
+  }
+  function reg() { navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {}); }
+  if (document.readyState === 'complete') setTimeout(reg, 800);
+  else window.addEventListener('load', function () { setTimeout(reg, 800); });
+})();
+</script>
 </body>
 </html>
